@@ -1,0 +1,35 @@
+{
+  "name": "@ramon-sg/claude-guard",
+  "version": "0.1.0",
+  "description": "Barandas para Claude Code: sandbox del sistema operativo, reglas de git y un doctor que muestra qué falta.",
+  "type": "module",
+  "bin": {
+    "claude-guard": "bin/claude-guard.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "hooks/*.sh",
+    "!hooks/*.test.sh",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test 'test/*.test.mjs' && bash hooks/guard-git-fs.test.sh && bash hooks/log-permission-request.test.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramon-sg/claude-guard.git"
+  },
+  "keywords": [
+    "claude-code",
+    "sandbox",
+    "security",
+    "git",
+    "kubernetes"
+  ],
+  "license": "MIT"
+}
