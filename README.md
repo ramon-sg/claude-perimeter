@@ -3,12 +3,12 @@
 Barandas para [Claude Code](https://code.claude.com): que el agente pueda trabajar solo, commitear, pushear a su rama, correr tests y abrir PRs, sin poder romper lo que no tiene vuelta atrás, como un push a `main`, un borrado fuera del proyecto o un cambio en tu cluster de producción.
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.1.0 setup    # configura la máquina (pide sudo)
-npx github:ramon-sg/claude-guard#v0.1.0 init     # configura el repo donde estás
-npx github:ramon-sg/claude-guard#v0.1.0 doctor   # muestra qué falta
+npx github:ramon-sg/claude-guard#v0.2.0 setup    # configura la máquina (pide sudo)
+npx github:ramon-sg/claude-guard#v0.2.0 init     # configura el repo donde estás
+npx github:ramon-sg/claude-guard#v0.2.0 doctor   # muestra qué falta
 ```
 
-No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.1.0` fija la versión, para que lo que se instala no cambie solo.
+No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.2.0` fija la versión, para que lo que se instala no cambie solo.
 
 ---
 
@@ -48,8 +48,8 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 ## `setup`: la máquina
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.1.0 setup --dry-run   # muestra qué haría, sin tocar nada
-npx github:ramon-sg/claude-guard#v0.1.0 setup             # lo hace (pide tu contraseña de sudo)
+npx github:ramon-sg/claude-guard#v0.2.0 setup --dry-run   # muestra qué haría, sin tocar nada
+npx github:ramon-sg/claude-guard#v0.2.0 setup             # lo hace (pide tu contraseña de sudo)
 ```
 
 Instala dos cosas en la carpeta de sistema de Claude Code (`/Library/Application Support/ClaudeCode/` en macOS, `/etc/claude-code/` en Linux):
@@ -59,7 +59,7 @@ Instala dos cosas en la carpeta de sistema de Claude Code (`/Library/Application
 
 Al terminar corre `sudo -k`, para que la contraseña de sudo no quede recordada y un comando del agente no pueda usarla.
 
-Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.1.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-guard.mjs setup`.
+Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.2.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-guard.mjs setup`.
 
 ### Lo que configura, pieza por pieza
 
@@ -87,17 +87,22 @@ Además, `setup` instala `bubblewrap` y `socat` con `apt-get` o `dnf`. En Ubuntu
 ### Desinstalar
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.1.0 setup --uninstall
+npx github:ramon-sg/claude-guard#v0.2.0 setup --uninstall
 ```
 
 ## `init`: el repo
 
 ```bash
 cd mi-repo
-npx github:ramon-sg/claude-guard#v0.1.0 init
+npx github:ramon-sg/claude-guard#v0.2.0 init
 ```
 
-Crea `.claude-guard.json` en la raíz del repo, si no existe, y corre el doctor del repo. Commitéalo para que valga en todos los clones y worktrees.
+Crea `.claude-guard.json` en la raíz del repo, si no existe, y corre el doctor del repo. Con una terminal te hace dos preguntas:
+
+1. **¿Alguna rama más donde nadie deba pushear directo?** Además de `main`, `master`, `staging` y `production`, que siempre lo están.
+2. **¿Hacia qué ramas puede mergear el agente sin preguntarte?** Sugiere `staging` si existe. Si respondes `main`, `master` o `production`, te lo rechaza: esos merges siempre pasan por ti.
+
+Antes de escribir el archivo, te muestra en lenguaje llano qué va a hacer y te pide confirmar. Commitéalo y llévalo a `main` con un PR, así vale en todos los clones y worktrees.
 
 ```json
 {
@@ -116,12 +121,12 @@ Este archivo solo puede **sumar** protecciones:
 - **Si el agente lo edita para quitar algo,** las ramas por omisión siguen protegidas y las de release siguen preguntando.
 - **Un merge a otro repo** (`gh pr merge -R otra/org …`) ignora esta configuración y pregunta.
 
-Opciones: `--merge-base <rama>` y `--protect <rama>`, repetibles.
+Sin terminal (en CI, o cuando lo corre el agente), no pregunta: usa `--merge-base <rama>` y `--protect <rama>`, repetibles, o la sugerencia con `--yes`.
 
 ## `doctor`: qué falta
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.1.0 doctor
+npx github:ramon-sg/claude-guard#v0.2.0 doctor
 ```
 
 ```

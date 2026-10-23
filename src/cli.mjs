@@ -17,9 +17,10 @@ Opciones de setup:
   --yes          No pregunta antes de cada paso.
   --uninstall    Borra lo que instaló setup.
 
-Opciones de init:
+Opciones de init (sin opciones y con una terminal, init pregunta):
   --merge-base <rama>       Rama a la que el agente puede mergear sin preguntar (repetible).
   --protect <rama>          Rama protegida además de main, master, staging y production (repetible).
+  --yes                     No pregunta: usa la sugerencia (staging, si existe).
 
 Opciones de doctor:
   --repo         Solo el repo.
@@ -52,6 +53,7 @@ export const main = async (argv) => {
       return init({
         mergeBases: has('--merge-base') ? values(args, '--merge-base') : undefined,
         protectedBranches: has('--protect') ? values(args, '--protect') : undefined,
+        yes: has('--yes'),
       });
     case 'doctor':
       return doctor({
