@@ -54,8 +54,8 @@ ln -s "$outside" "$repo/link"
 # rama de release; release se suma a las protegidas.
 committed='{"mergeBases": ["staging", "main"], "protectedBranches": ["release"]}'
 git -C "$repo" worktree add -q "$tmp/main-checkout" main
-printf '%s\n' "$committed" >"$tmp/main-checkout/.claude-guard.json"
-git -C "$tmp/main-checkout" add .claude-guard.json
+printf '%s\n' "$committed" >"$tmp/main-checkout/.claude-perimeter.json"
+git -C "$tmp/main-checkout" add .claude-perimeter.json
 git -C "$tmp/main-checkout" -c user.email=t@t -c user.name=t commit -q -m config
 git -C "$tmp/main-checkout" push -q origin main
 git -C "$repo" fetch -q origin
@@ -64,7 +64,7 @@ git -C "$repo" fetch -q origin
 git -C "$repo" remote set-url origin https://github.com/test/repo.git
 # La copia de trabajo suma develop a las bases: como el agente puede editarla,
 # eso no tiene que ampliar nada.
-printf '%s\n' '{"mergeBases": ["staging", "main", "develop"], "protectedBranches": ["release"]}' >"$repo/.claude-guard.json"
+printf '%s\n' '{"mergeBases": ["staging", "main", "develop"], "protectedBranches": ["release"]}' >"$repo/.claude-perimeter.json"
 
 # Imprime la decisión del hook (deny|ask|none) para <cwd> <command>.
 decision() {
@@ -131,7 +131,7 @@ assert_eq 'GUARD_PROTECTED_BRANCHES=qa: push a main → none' \
 expect deny 'git push origin master'
 expect deny 'git push origin production'
 expect deny 'git push origin release'
-assert_eq '.claude-guard.json suma ramas aunque GUARD_PROTECTED_BRANCHES cambie' \
+assert_eq '.claude-perimeter.json suma ramas aunque GUARD_PROTECTED_BRANCHES cambie' \
   "$(GUARD_PROTECTED_BRANCHES=qa decision "$repo" 'git push origin release')" deny
 
 echo '── git de red: lo que corre fuera del sandbox no puede ejecutar código propio'
@@ -291,13 +291,13 @@ expect none 'gh pr merge 12 --merge'
 expect none 'gh pr merge --merge'
 expect none 'gh pr merge 12 -m -d'
 expect none 'gh pr merge 12 --merge --delete-branch -b "cuerpo -s"'
-assert_eq 'merge con base main → ask, aunque .claude-guard.json la liste' "$(GH_BASE=main decision "$repo" 'gh pr merge 12 --merge')" ask
+assert_eq 'merge con base main → ask, aunque .claude-perimeter.json la liste' "$(GH_BASE=main decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq 'GUARD_MERGE_BASES=main tampoco la vuelve automática → ask' \
   "$(GH_BASE=main GUARD_MERGE_BASES=main decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq 'merge con gh fallando → ask' "$(GH_FAIL=1 decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq 'GUARD_MERGE_BASES="staging develop": base develop → none' \
   "$(GH_BASE=develop GUARD_MERGE_BASES='staging develop' decision "$repo" 'gh pr merge 12 --merge')" none
-assert_eq 'develop solo en la copia de trabajo de .claude-guard.json → ask' \
+assert_eq 'develop solo en la copia de trabajo de .claude-perimeter.json → ask' \
   "$(GH_BASE=develop decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq '-R a otro repo: la configuración de este no aplica → ask' \
   "$(decision "$repo" 'gh pr merge 12 --merge -R otra/org')" ask

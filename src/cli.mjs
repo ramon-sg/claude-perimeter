@@ -5,12 +5,12 @@ import { init } from './commands/init.mjs';
 import { setup } from './commands/setup.mjs';
 import { PACKAGE_ROOT } from './platform.mjs';
 
-const HELP = `claude-guard: barandas para Claude Code.
+const HELP = `claude-perimeter: barandas para Claude Code.
 
 Uso:
-  claude-guard setup     Configura la máquina (sandbox, permisos, hooks). Pide sudo.
-  claude-guard init      Configura el repo donde lo corres (.claude-guard.json).
-  claude-guard doctor    Revisa la máquina y el repo, y dice qué falta.
+  claude-perimeter setup     Configura la máquina (sandbox, permisos, hooks). Pide sudo.
+  claude-perimeter init      Configura el repo donde lo corres (.claude-perimeter.json).
+  claude-perimeter doctor    Revisa la máquina y el repo, y dice qué falta.
 
 Opciones de setup:
   --dry-run      Muestra qué haría, sin cambiar nada.
@@ -29,7 +29,7 @@ Opciones de doctor:
   --offline      Sin consultas a GitHub.
   --json         Salida en JSON.
 
-Más: https://github.com/ramon-sg/claude-guard
+Más: https://github.com/ramon-sg/claude-perimeter
 `;
 
 /**
@@ -74,7 +74,7 @@ export const main = async (argv) => {
       process.stdout.write(HELP);
       return 0;
     default:
-      process.stderr.write(`claude-guard: no conozco el comando "${command}".\n\n${HELP}`);
+      process.stderr.write(`claude-perimeter: no conozco el comando "${command}".\n\n${HELP}`);
       return 1;
   }
 };

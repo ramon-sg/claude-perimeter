@@ -27,7 +27,7 @@ repo="$tmp/repo"
 git init -q -b main "$repo"
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 git -C "$repo" worktree add -q "$tmp/otro" -b otro
-logs="$tmp/state/claude-guard/permission-requests"
+logs="$tmp/state/claude-perimeter/permission-requests"
 
 # Corre el hook con <input JSON> y deja la salida estándar en $tmp/stdout.
 run_hook() {

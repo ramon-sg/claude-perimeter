@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { buildManagedSettings, evaluateManagedSettings, shellQuote } from '../src/managed-settings.mjs';
 
 const build = (platform = 'darwin') =>
-  buildManagedSettings({ platform, home: '/Users/ana', hooksDirectory: '/Library/Application Support/ClaudeCode/claude-guard/hooks' });
+  buildManagedSettings({ platform, home: '/Users/ana', hooksDirectory: '/Library/Application Support/ClaudeCode/claude-perimeter/hooks' });
 
 describe('buildManagedSettings', () => {
   it('cierra la salida del sandbox y no arranca sin él', () => {
@@ -47,9 +47,9 @@ describe('buildManagedSettings', () => {
   it('fuera del proyecto, solo deja escribir en los cachés propios del agente', () => {
     for (const platform of ['darwin', 'linux']) {
       const settings = build(platform);
-      assert.deepEqual(settings.sandbox.filesystem.allowWrite, ['/Users/ana/.cache/claude-guard'], platform);
-      assert.equal(settings.env.npm_config_cache, '/Users/ana/.cache/claude-guard/npm');
-      assert.equal(settings.env.npm_config_store_dir, '/Users/ana/.cache/claude-guard/pnpm-store');
+      assert.deepEqual(settings.sandbox.filesystem.allowWrite, ['/Users/ana/.cache/claude-perimeter'], platform);
+      assert.equal(settings.env.npm_config_cache, '/Users/ana/.cache/claude-perimeter/npm');
+      assert.equal(settings.env.npm_config_store_dir, '/Users/ana/.cache/claude-perimeter/pnpm-store');
       assert.ok(settings.sandbox.filesystem.denyWrite.includes('~/.npm/_npx'), platform);
       assert.ok(settings.sandbox.filesystem.denyWrite.includes('~/.claude'), platform);
     }
@@ -65,7 +65,7 @@ describe('buildManagedSettings', () => {
 
   it('registra los hooks con la ruta entre comillas (tiene espacios)', () => {
     const command = build().hooks.PreToolUse[0].hooks[0].command;
-    assert.equal(command, "'/Library/Application Support/ClaudeCode/claude-guard/hooks/guard-git-fs.sh'");
+    assert.equal(command, "'/Library/Application Support/ClaudeCode/claude-perimeter/hooks/guard-git-fs.sh'");
   });
 
   it('lo que arma pasa su propia evaluación', () => {

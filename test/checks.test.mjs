@@ -54,7 +54,7 @@ describe('broadAllowRules', () => {
 describe('parseGithubRemote', () => {
   it('lee https y ssh', () => {
     assert.deepEqual(parseGithubRemote('https://github.com/rsat/cleanqueen.git'), { owner: 'rsat', name: 'cleanqueen' });
-    assert.deepEqual(parseGithubRemote('git@github.com:ramon-sg/claude-guard.git'), { owner: 'ramon-sg', name: 'claude-guard' });
+    assert.deepEqual(parseGithubRemote('git@github.com:ramon-sg/claude-perimeter.git'), { owner: 'ramon-sg', name: 'claude-perimeter' });
     assert.deepEqual(parseGithubRemote('https://github.com/a/b'), { owner: 'a', name: 'b' });
   });
 
@@ -132,7 +132,7 @@ describe('renderReport', () => {
     assert.match(text, /✗ Mal\n {6}porque sí\n {6}→ arréglalo/);
     assert.match(text, /⚠ Ojo\n {6}→ míralo/);
     assert.doesNotMatch(text, /oculto sin --explain/);
-    assert.match(text, /1 problema, 1 aviso\. Más detalle: claude-guard doctor --explain/);
+    assert.match(text, /1 problema, 1 aviso\. Más detalle: claude-perimeter doctor --explain/);
   });
 
   it('con --explain muestra el detalle de los avisos', () => {

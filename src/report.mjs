@@ -35,7 +35,7 @@ export const renderReport = (groups, { color = false, explain = false } = {}) =>
     const parts = [];
     if (failures > 0) parts.push(paint('fail', `${failures} ${failures === 1 ? 'problema' : 'problemas'}`));
     if (warnings > 0) parts.push(paint('warn', `${warnings} ${warnings === 1 ? 'aviso' : 'avisos'}`));
-    lines.push(parts.join(', ') + (explain ? '.' : '. Más detalle: claude-guard doctor --explain'));
+    lines.push(parts.join(', ') + (explain ? '.' : '. Más detalle: claude-perimeter doctor --explain'));
   }
   return lines.join('\n');
 };

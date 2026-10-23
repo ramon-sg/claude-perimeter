@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 /** Raíz del paquete instalado (donde están `hooks/` y `package.json`). */
 export const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export const DROP_IN_FILE_NAME = '50-claude-guard.json';
+export const DROP_IN_FILE_NAME = '50-claude-perimeter.json';
 
 /**
  * Carpeta de sistema donde Claude Code lee los managed settings.
@@ -33,7 +33,7 @@ export const installPaths = (platform) => {
     base,
     dropInDirectory: path.join(base, 'managed-settings.d'),
     dropInFile: path.join(base, 'managed-settings.d', DROP_IN_FILE_NAME),
-    hooksDirectory: path.join(base, 'claude-guard', 'hooks'),
+    hooksDirectory: path.join(base, 'claude-perimeter', 'hooks'),
   };
 };
 

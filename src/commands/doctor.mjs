@@ -4,7 +4,7 @@ import { platformName, userHome } from '../platform.mjs';
 import { hasFailures, renderReport } from '../report.mjs';
 
 /**
- * `claude-guard doctor`: revisa la máquina y el repo, y dice qué falta.
+ * `claude-perimeter doctor`: revisa la máquina y el repo, y dice qué falta.
  * No cambia nada. Sale con código 1 si hay algún problema.
  *
  * @param {{ repoOnly?: boolean, machineOnly?: boolean, explain?: boolean, json?: boolean, offline?: boolean }} options
@@ -23,7 +23,7 @@ export const doctor = (options) => {
     process.stdout.write(`${JSON.stringify(groups, null, 2)}\n`);
   } else {
     const color = process.stdout.isTTY && !process.env.NO_COLOR;
-    process.stdout.write(`claude-guard doctor\n${renderReport(groups, { color, explain: options.explain })}\n`);
+    process.stdout.write(`claude-perimeter doctor\n${renderReport(groups, { color, explain: options.explain })}\n`);
   }
   return hasFailures(checks) ? 1 : 0;
 };

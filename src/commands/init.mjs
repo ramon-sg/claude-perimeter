@@ -36,7 +36,7 @@ export const parseBranchList = (answer) => {
 };
 
 /**
- * Arma el contenido de `.claude-guard.json`. Las ramas de release nunca quedan
+ * Arma el contenido de `.claude-perimeter.json`. Las ramas de release nunca quedan
  * en mergeBases: el guardia las ignoraría igual.
  *
  * @param {{ protectedBranches: string[], mergeBases: string[] }} answers
@@ -48,7 +48,7 @@ export const buildConfig = ({ protectedBranches, mergeBases }) => {
     ignored,
     config: {
       $comment:
-        'Configuración de claude-guard (https://github.com/ramon-sg/claude-guard). protectedBranches suma ramas a main, ' +
+        'Configuración de claude-perimeter (https://github.com/ramon-sg/claude-perimeter). protectedBranches suma ramas a main, ' +
         'master, staging y production. mergeBases son las bases a las que el agente mergea sin preguntar (nunca main, ' +
         'master ni production) y se leen de la versión de este archivo en origin/main.',
       protectedBranches: protectedBranches.filter((branch) => !DEFAULT_PROTECTED_BRANCHES.includes(branch)),
@@ -124,7 +124,7 @@ const confirmWrite = async () => {
 };
 
 /**
- * `claude-guard init`: crea el `.claude-guard.json` del repo y revisa el repo.
+ * `claude-perimeter init`: crea el `.claude-perimeter.json` del repo y revisa el repo.
  * Con una terminal pregunta qué proteger y hacia dónde mergear; sin terminal
  * (CI, el propio agente) usa --protect, --merge-base o la sugerencia. No
  * sobrescribe un archivo que ya existe.
@@ -134,7 +134,7 @@ const confirmWrite = async () => {
 export const init = async (options) => {
   const toplevel = run('git', ['rev-parse', '--show-toplevel']).stdout;
   if (toplevel === '') {
-    process.stderr.write('claude-guard init: corre esto dentro de un repo de git.\n');
+    process.stderr.write('claude-perimeter init: corre esto dentro de un repo de git.\n');
     return 1;
   }
   const file = path.join(toplevel, CONFIG_FILE_NAME);

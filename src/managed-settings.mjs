@@ -66,22 +66,22 @@ export const dockerSockets = (platform, home) => (platform === 'darwin' ? [path.
 /**
  * Cachés propios del agente para npm y pnpm. Nunca los tuyos: lo que el agente
  * escribe en un caché que después usas tú fuera del sandbox (tu `pnpm install`,
- * el `npx` con que corres `claude-guard setup`) sería código suyo corriendo con
+ * el `npx` con que corres `claude-perimeter setup`) sería código suyo corriendo con
  * tu acceso. Es la única carpeta fuera del proyecto que el sandbox deja escribir.
  *
  * @param {string} home
  */
 export const agentCaches = (home) => ({
-  root: path.join(home, '.cache/claude-guard'),
-  npm: path.join(home, '.cache/claude-guard/npm'),
-  pnpmStore: path.join(home, '.cache/claude-guard/pnpm-store'),
+  root: path.join(home, '.cache/claude-perimeter'),
+  npm: path.join(home, '.cache/claude-perimeter/npm'),
+  pnpmStore: path.join(home, '.cache/claude-perimeter/pnpm-store'),
 });
 
 /** Lo que nunca escribe un comando del sandbox, aunque una regla más amplia lo permita. */
 export const PROTECTED_WRITE_PATHS = ['~/.npm/_npx', '~/.claude', '~/.config/gh'];
 
 /**
- * Arma el archivo `managed-settings.d/50-claude-guard.json`.
+ * Arma el archivo `managed-settings.d/50-claude-perimeter.json`.
  *
  * @param {{ platform: NodeJS.Platform, home: string, hooksDirectory: string }} options
  */

@@ -8,7 +8,7 @@
 # (el comando en Bash, el file_path en herramientas de archivos, el tool_input
 # compacto en el resto).
 #
-# Dónde: ${XDG_STATE_HOME:-$HOME/.local/state}/claude-guard/permission-requests/,
+# Dónde: ${XDG_STATE_HOME:-$HOME/.local/state}/claude-perimeter/permission-requests/,
 # un archivo por repo (<carpeta>-<hash>.jsonl), el mismo para el checkout
 # principal y todos sus worktrees. Fuera de un repo, no-repo.jsonl.
 #
@@ -20,7 +20,7 @@
 # con permisos 700 y el hook se niega a escribir a través de un enlace.
 #
 # Leerlo, de lo más frecuente a lo menos:
-#   jq -r '.tool_name + " " + .detail' ~/.local/state/claude-guard/permission-requests/*.jsonl \
+#   jq -r '.tool_name + " " + .detail' ~/.local/state/claude-perimeter/permission-requests/*.jsonl \
 #     | sort | uniq -c | sort -rn
 
 input="$(cat)"
@@ -46,7 +46,7 @@ line="$(printf '%s' "$input" | jq -c --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }' 2>/dev/null)" || exit 0
 [ -n "$line" ] || exit 0
 
-directory="${XDG_STATE_HOME:-$HOME/.local/state}/claude-guard/permission-requests"
+directory="${XDG_STATE_HOME:-$HOME/.local/state}/claude-perimeter/permission-requests"
 (umask 077 && mkdir -p "$directory") 2>/dev/null || exit 0
 # Ni la carpeta ni el archivo pueden ser enlaces: el hook escribiría donde apuntan.
 for part in "$directory" "$(dirname "$directory")"; do

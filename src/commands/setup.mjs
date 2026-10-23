@@ -41,7 +41,7 @@ const sudo = (args) => {
 };
 
 const writeTemporary = (name, content) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-guard-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-perimeter-'));
   const file = path.join(directory, name);
   fs.writeFileSync(file, content);
   return file;
@@ -117,7 +117,7 @@ const macosManualSteps = () => {
 };
 
 /**
- * `claude-guard setup`: instala la configuración de máquina. Pide sudo para
+ * `claude-perimeter setup`: instala la configuración de máquina. Pide sudo para
  * escribir en la carpeta de sistema de Claude Code: ese es el punto, el agente
  * no puede editar lo que queda ahí.
  *
@@ -127,7 +127,7 @@ export const setup = async (options) => {
   const platform = process.platform;
   const paths = installPaths(platform);
   if (paths === undefined) {
-    process.stderr.write(`claude-guard: ${platformName(platform)} no está soportado (solo macOS y Linux).\n`);
+    process.stderr.write(`claude-perimeter: ${platformName(platform)} no está soportado (solo macOS y Linux).\n`);
     return 1;
   }
 
@@ -138,7 +138,7 @@ export const setup = async (options) => {
     sudo(['rm', '-f', paths.dropInFile]);
     sudo(['rm', '-rf', path.dirname(paths.hooksDirectory)]);
     runInteractive('sudo', ['-k']);
-    process.stdout.write('Listo: claude-guard quedó desinstalado de esta máquina.\n');
+    process.stdout.write('Listo: claude-perimeter quedó desinstalado de esta máquina.\n');
     return 0;
   }
 
@@ -164,7 +164,7 @@ export const setup = async (options) => {
     ...(platform === 'linux' ? linuxSteps() : macosSteps()),
   ];
 
-  process.stdout.write(`claude-guard setup (${platformName(platform)})\n\nPasos:\n`);
+  process.stdout.write(`claude-perimeter setup (${platformName(platform)})\n\nPasos:\n`);
   for (const step of steps) process.stdout.write(`  • ${step.description}${step.optional ? ' (opcional)' : ''}\n`);
   if (options.dryRun) {
     process.stdout.write(`\nContenido de ${paths.dropInFile}:\n${settingsJson}`);
@@ -183,7 +183,7 @@ export const setup = async (options) => {
       step.run();
     }
   } catch (error) {
-    process.stderr.write(`\nclaude-guard setup se detuvo: ${error.message}\n`);
+    process.stderr.write(`\nclaude-perimeter setup se detuvo: ${error.message}\n`);
     return 1;
   } finally {
     // Olvida la contraseña de sudo: si quedara recordada, un comando del agente

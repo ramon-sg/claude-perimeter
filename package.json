@@ -1,10 +1,10 @@
 {
-  "name": "@ramon-sg/claude-guard",
+  "name": "@ramon-sg/claude-perimeter",
   "version": "0.2.0",
   "description": "Barandas para Claude Code: sandbox del sistema operativo, reglas de git y un doctor que muestra qué falta.",
   "type": "module",
   "bin": {
-    "claude-guard": "bin/claude-guard.mjs"
+    "claude-perimeter": "bin/claude-perimeter.mjs"
   },
   "files": [
     "bin",
@@ -22,7 +22,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ramon-sg/claude-guard.git"
+    "url": "git+https://github.com/ramon-sg/claude-perimeter.git"
   },
   "keywords": [
     "claude-code",

@@ -1,11 +1,11 @@
-# claude-guard
+# claude-perimeter
 
 Barandas para [Claude Code](https://code.claude.com): que el agente pueda trabajar solo, commitear, pushear a su rama, correr tests y abrir PRs, sin poder romper lo que no tiene vuelta atrás, como un push a `main`, un borrado fuera del proyecto o un cambio en tu cluster de producción.
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.2.0 setup    # configura la máquina (pide sudo)
-npx github:ramon-sg/claude-guard#v0.2.0 init     # configura el repo donde estás
-npx github:ramon-sg/claude-guard#v0.2.0 doctor   # muestra qué falta
+npx github:ramon-sg/claude-perimeter#v0.2.0 setup    # configura la máquina (pide sudo)
+npx github:ramon-sg/claude-perimeter#v0.2.0 init     # configura el repo donde estás
+npx github:ramon-sg/claude-perimeter#v0.2.0 doctor   # muestra qué falta
 ```
 
 No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.2.0` fija la versión, para que lo que se instala no cambie solo.
@@ -17,7 +17,7 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 - **El problema.** Claude Code corre como tu usuario. Todo lo que tú puedes hacer, el agente también: leer tu `~/.kube/config` y tocar producción, pushear a `main`, borrar una carpeta.
 - **Por qué no basta con reglas en el `CLAUDE.md`.** Son instrucciones: el modelo puede no seguirlas.
 - **Por qué no basta con un filtro de comandos.** Un filtro mira el texto. Si el agente corre `python3 -c "…kubectl delete…"` o un script, el filtro ve `python3` y lo deja pasar.
-- **Lo que hace claude-guard.** Mueve el control a donde el agente no llega:
+- **Lo que hace claude-perimeter.** Mueve el control a donde el agente no llega:
   - **El sistema operativo** (el sandbox de Claude Code) bloquea que cualquier comando del agente, y cualquier proceso que ese comando lance, lea tus credenciales.
   - **Los managed settings**, un archivo de sistema propiedad de root, guardan esa configuración donde el agente no puede editarla.
   - **Un guardia de git** rechaza push a ramas protegidas, push forzado y merges que no son merge commit.
@@ -48,18 +48,18 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 ## `setup`: la máquina
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.2.0 setup --dry-run   # muestra qué haría, sin tocar nada
-npx github:ramon-sg/claude-guard#v0.2.0 setup             # lo hace (pide tu contraseña de sudo)
+npx github:ramon-sg/claude-perimeter#v0.2.0 setup --dry-run   # muestra qué haría, sin tocar nada
+npx github:ramon-sg/claude-perimeter#v0.2.0 setup             # lo hace (pide tu contraseña de sudo)
 ```
 
 Instala dos cosas en la carpeta de sistema de Claude Code (`/Library/Application Support/ClaudeCode/` en macOS, `/etc/claude-code/` en Linux):
 
-1. **`managed-settings.d/50-claude-guard.json`**, un archivo propio. Si ya tienes un `managed-settings.json`, no lo toca: Claude Code combina los dos.
-2. **`claude-guard/hooks/`**, con el guardia de git y el registro de preguntas, propiedad de root.
+1. **`managed-settings.d/50-claude-perimeter.json`**, un archivo propio. Si ya tienes un `managed-settings.json`, no lo toca: Claude Code combina los dos.
+2. **`claude-perimeter/hooks/`**, con el guardia de git y el registro de preguntas, propiedad de root.
 
 Al terminar corre `sudo -k`, para que la contraseña de sudo no quede recordada y un comando del agente no pueda usarla.
 
-Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.2.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-guard.mjs setup`.
+Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.2.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-perimeter.mjs setup`.
 
 ### Lo que configura, pieza por pieza
 
@@ -69,8 +69,8 @@ Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre c
 | `sandbox.failIfUnavailable` | `true` | Si el sandbox no puede arrancar, Claude Code no arranca. Sin esto, correría los comandos sin protección |
 | `sandbox.allowUnsandboxedCommands` | `false` | Un comando que falla dentro del sandbox no se puede reintentar afuera. Además, el repo ya no puede aflojar el sandbox con su propio `.claude/settings.json` |
 | `sandbox.filesystem.denyRead` | `~/.kube`, `~/.aws`, `~/.azure`, `~/.config/gcloud`, `~/.ssh` | Ningún comando del sandbox puede leer credenciales |
-| `sandbox.filesystem.allowWrite` | `~/.cache/claude-guard` | La única carpeta fuera del proyecto donde se escribe: los cachés propios del agente para npm y pnpm |
-| `env` | `npm_config_cache` y `npm_config_store_dir` apuntan a `~/.cache/claude-guard` | El agente usa su propio caché de paquetes, no el tuyo. Así, lo que escribe no termina corriendo cuando tú instalas algo o corres `npx` fuera del sandbox. El costo: la primera instalación del agente baja todo de nuevo |
+| `sandbox.filesystem.allowWrite` | `~/.cache/claude-perimeter` | La única carpeta fuera del proyecto donde se escribe: los cachés propios del agente para npm y pnpm |
+| `env` | `npm_config_cache` y `npm_config_store_dir` apuntan a `~/.cache/claude-perimeter` | El agente usa su propio caché de paquetes, no el tuyo. Así, lo que escribe no termina corriendo cuando tú instalas algo o corres `npx` fuera del sandbox. El costo: la primera instalación del agente baja todo de nuevo |
 | `sandbox.filesystem.denyWrite` | `~/.npm/_npx`, `~/.claude`, `~/.config/gh` | El caché de npx (de donde corre `setup` con sudo), tu configuración de Claude Code y la de `gh` |
 | `sandbox.excludedCommands` | `kubectl`, `helm`, `git push`, `git fetch`, `git pull`, y de `gh` solo lo que lee o publica sin escribir archivos locales (`pr view`/`create`/`merge`/…, `issue view`/`list`, `run view`/`list`/`watch`/`rerun`, `api`, `repo view`, `auth status`) | Corren fuera del sandbox porque necesitan una credencial o la red de GitHub. Son pocos y por subcomando: `gh pr checkout`, `gh run download`, `gh gist`, `gh extension` o `gh release upload` quedan dentro, sin red |
 | `permissions.ask` | `kubectl`, `helm` | Preguntan antes de cada uso, también en modo `bypass` |
@@ -87,17 +87,17 @@ Además, `setup` instala `bubblewrap` y `socat` con `apt-get` o `dnf`. En Ubuntu
 ### Desinstalar
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.2.0 setup --uninstall
+npx github:ramon-sg/claude-perimeter#v0.2.0 setup --uninstall
 ```
 
 ## `init`: el repo
 
 ```bash
 cd mi-repo
-npx github:ramon-sg/claude-guard#v0.2.0 init
+npx github:ramon-sg/claude-perimeter#v0.2.0 init
 ```
 
-Crea `.claude-guard.json` en la raíz del repo, si no existe, y corre el doctor del repo. Con una terminal te hace dos preguntas:
+Crea `.claude-perimeter.json` en la raíz del repo, si no existe, y corre el doctor del repo. Con una terminal te hace dos preguntas:
 
 1. **¿Alguna rama más donde nadie deba pushear directo?** Además de `main`, `master`, `staging` y `production`, que siempre lo están.
 2. **¿Hacia qué ramas puede mergear el agente sin preguntarte?** Sugiere `staging` si existe. Si respondes `main`, `master` o `production`, te lo rechaza: esos merges siempre pasan por ti.
@@ -126,11 +126,11 @@ Sin terminal (en CI, o cuando lo corre el agente), no pregunta: usa `--merge-bas
 ## `doctor`: qué falta
 
 ```bash
-npx github:ramon-sg/claude-guard#v0.2.0 doctor
+npx github:ramon-sg/claude-perimeter#v0.2.0 doctor
 ```
 
 ```
-claude-guard doctor
+claude-perimeter doctor
 
 Máquina (macOS)
   ✓ Plataforma: macOS
@@ -147,12 +147,12 @@ Máquina (macOS)
 
 Repo
   ✓ Repo: /Users/ana/Projects/mi-repo
-  ✓ .claude-guard.json presente
+  ✓ .claude-perimeter.json presente
   ✓ ramon-sg/mi-repo: solo merge commit
   ✗ staging: sin protección en GitHub
       → Settings → Rules → Rulesets: para staging, exigir PR y bloquear force push (requiere admin del repo).
 
-2 problemas, 1 aviso. Más detalle: claude-guard doctor --explain
+2 problemas, 1 aviso. Más detalle: claude-perimeter doctor --explain
 ```
 
 No cambia nada. Sale con código 1 si hay algún problema, así que sirve en CI o en un script de tests.
@@ -176,12 +176,12 @@ No cambia nada. Sale con código 1 si hay algún problema, así que sirve en CI 
 - **Linux:** `bubblewrap`, `socat`, el perfil de AppArmor si hace falta, y si Docker corre sin root.
 
 **En el repo:**
-- `.claude-guard.json`.
+- `.claude-perimeter.json`.
 - Reglas `allow` demasiado amplias en `.claude/settings.json` y `.claude/settings.local.json`, como `Bash(python3 *)` o `Bash(docker *)`, y `disableAllHooks`.
 - Si los hooks de git viven dentro del repo (por ejemplo `.husky/`). Ver [Límites conocidos](#límites-conocidos).
 - En GitHub: que el repo permita solo merge commit, y que cada rama protegida tenga reglas que bloqueen el push directo y el forzado.
 
-**Lo que no revisa:** tu kubeconfig, tus contextos de Kubernetes ni nada de tu cluster. claude-guard nunca los abre.
+**Lo que no revisa:** tu kubeconfig, tus contextos de Kubernetes ni nada de tu cluster. claude-perimeter nunca los abre.
 
 ## Trabajar con Kubernetes
 
@@ -228,10 +228,10 @@ Es un filtro de texto: atrapa equivocaciones, no a alguien que lo quiere esquiva
 
 ## Registro de preguntas
 
-Cada vez que Claude Code te pide permiso, el hook `log-permission-request.sh` anota una línea en `~/.local/state/claude-guard/permission-requests/<repo>-<hash>.jsonl`. Hay un archivo por repo, compartido por el checkout principal y sus worktrees. Para ver qué te frena más:
+Cada vez que Claude Code te pide permiso, el hook `log-permission-request.sh` anota una línea en `~/.local/state/claude-perimeter/permission-requests/<repo>-<hash>.jsonl`. Hay un archivo por repo, compartido por el checkout principal y sus worktrees. Para ver qué te frena más:
 
 ```bash
-jq -r '.tool_name + " " + .detail' ~/.local/state/claude-guard/permission-requests/*.jsonl \
+jq -r '.tool_name + " " + .detail' ~/.local/state/claude-perimeter/permission-requests/*.jsonl \
   | sort | uniq -c | sort -rn | head -30
 ```
 
@@ -247,7 +247,7 @@ Lo que más se repite es lo que conviene aprobar en tus reglas, o en `/auto-mode
 - **El modo `auto` sigue preguntando por comandos complejos.** El sandbox no cambia lo que revisa el clasificador del modo `auto`. Las preguntas por comandos largos se ajustan con `/auto-mode-setup`.
 - **Un `gh` con `$(…)` corre dentro del sandbox.** Claude Code deja dentro todo comando con una sustitución, y en macOS `gh` no funciona ahí. Para el cuerpo de un PR o un comentario, escríbelo a un archivo del proyecto y pásalo con `--body-file`. El guardia rechaza `--body-file` fuera del proyecto, los enlaces y las redirecciones de entrada (`< archivo`).
 - **Algunas herramientas no funcionan dentro del sandbox.** En macOS, `gh` (por TLS) y git por SSH. Por eso están excluidas. Si otro comando habitual falla, revisa el mensaje: Claude Code dice qué dominio o carpeta bloqueó.
-- **Los hooks de git y la configuración se revisan, pero no se fuerzan, en GitHub.** Solo un admin del repo puede activar la protección de ramas. claude-guard la revisa y te dice cómo pedirla.
+- **Los hooks de git y la configuración se revisan, pero no se fuerzan, en GitHub.** Solo un admin del repo puede activar la protección de ramas. claude-perimeter la revisa y te dice cómo pedirla.
 
 ## Desarrollo
 

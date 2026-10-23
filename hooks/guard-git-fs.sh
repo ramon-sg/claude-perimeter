@@ -38,23 +38,23 @@ GUARD_DEFAULT_PROTECTED_BRANCHES="main master staging production"
 GUARD_RELEASE_BRANCHES="main master production"
 
 # Imprime la lista <key> (protectedBranches o mergeBases), separada por
-# espacios, del .claude-guard.json en la raíz del repo que contiene <directory>.
+# espacios, del .claude-perimeter.json en la raíz del repo que contiene <directory>.
 guard_repo_list() {
   local toplevel file
   toplevel="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 0
-  file="$toplevel/.claude-guard.json"
+  file="$toplevel/.claude-perimeter.json"
   [ -f "$file" ] || return 0
   jq -r --arg key "$2" '.[$key] // [] | .[] | strings' "$file" 2>/dev/null | tr '\n' ' '
 }
 
-# Igual que guard_repo_list, pero leyendo el .claude-guard.json commiteado en
+# Igual que guard_repo_list, pero leyendo el .claude-perimeter.json commiteado en
 # la primera rama de release que exista en origin (main o master), donde el
 # agente no puede pushear. Para lo que afloja reglas, como mergeBases.
 guard_committed_repo_list() {
   local reference
   for reference in origin/main origin/master; do
-    if git -C "$1" cat-file -e "$reference:.claude-guard.json" 2>/dev/null; then
-      git -C "$1" show "$reference:.claude-guard.json" 2>/dev/null \
+    if git -C "$1" cat-file -e "$reference:.claude-perimeter.json" 2>/dev/null; then
+      git -C "$1" show "$reference:.claude-perimeter.json" 2>/dev/null \
         | jq -r --arg key "$2" '.[$key] // [] | .[] | strings' 2>/dev/null | tr '\n' ' '
       return 0
     fi
