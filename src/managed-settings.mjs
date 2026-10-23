@@ -66,26 +66,56 @@ export const dockerSockets = (platform, home) => (platform === 'darwin' ? [path.
 /**
  * Cachés propios del agente para npm y pnpm. Nunca los tuyos: lo que el agente
  * escribe en un caché que después usas tú fuera del sandbox (tu `pnpm install`,
- * el `npx` con que corres `claude-guard setup`) sería código suyo corriendo con
+ * el `npx` con que corres `claude-perimeter setup`) sería código suyo corriendo con
  * tu acceso. Es la única carpeta fuera del proyecto que el sandbox deja escribir.
  *
  * @param {string} home
  */
 export const agentCaches = (home) => ({
-  root: path.join(home, '.cache/claude-guard'),
-  npm: path.join(home, '.cache/claude-guard/npm'),
-  pnpmStore: path.join(home, '.cache/claude-guard/pnpm-store'),
+  root: path.join(home, '.cache/claude-perimeter'),
+  npm: path.join(home, '.cache/claude-perimeter/npm'),
+  pnpmStore: path.join(home, '.cache/claude-perimeter/pnpm-store'),
 });
 
 /** Lo que nunca escribe un comando del sandbox, aunque una regla más amplia lo permita. */
 export const PROTECTED_WRITE_PATHS = ['~/.npm/_npx', '~/.claude', '~/.config/gh'];
 
 /**
- * Arma el archivo `managed-settings.d/50-claude-guard.json`.
+ * Comando del hook de Safety Net. Usa la copia de root y una carpeta de
+ * configuración de root, e ignora lo que el `.cc-safety-net/` de un repo
+ * intente aflojar: el agente puede editar el repo, no esas carpetas.
  *
- * @param {{ platform: NodeJS.Platform, home: string, hooksDirectory: string }} options
+ * @param {{ nodePath: string, safetyNetDirectory: string, safetyNetHome: string }} options
  */
-export const buildManagedSettings = ({ platform, home, hooksDirectory }) => ({
+export const safetyNetHookCommand = ({ nodePath, safetyNetDirectory, safetyNetHome }) =>
+  [
+    `CC_SAFETY_NET_HOME=${shellQuote(safetyNetHome)}`,
+    'CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY=1',
+    shellQuote(nodePath),
+    shellQuote(path.join(safetyNetDirectory, 'dist/bin/cc-safety-net.js')),
+    'hook --claude-code',
+  ].join(' ');
+
+/**
+ * ¿<command> es el hook de Safety Net para Claude Code?
+ *
+ * @param {string} command
+ */
+export const isSafetyNetCommand = (command) => /cc-safety-net\.js'?\s+hook\s+--claude-code\b/.test(command);
+
+/**
+ * Arma el archivo `managed-settings.d/50-claude-perimeter.json`.
+ *
+ * @param {{
+ *   platform: NodeJS.Platform,
+ *   home: string,
+ *   hooksDirectory: string,
+ *   nodePath: string,
+ *   safetyNetDirectory: string,
+ *   safetyNetHome: string,
+ * }} options
+ */
+export const buildManagedSettings = ({ platform, home, hooksDirectory, nodePath, safetyNetDirectory, safetyNetHome }) => ({
   $schema: 'https://json.schemastore.org/claude-code-settings.json',
   env: {
     npm_config_cache: agentCaches(home).npm,
@@ -118,9 +148,13 @@ export const buildManagedSettings = ({ platform, home, hooksDirectory }) => ({
   },
   hooks: {
     PreToolUse: [
+      // Sin matcher: Safety Net revisa toda herramienta (Bash, Read, Edit, …).
+      {
+        hooks: [{ type: 'command', command: safetyNetHookCommand({ nodePath, safetyNetDirectory, safetyNetHome }) }],
+      },
       {
         matcher: 'Bash',
-        hooks: [{ type: 'command', command: shellQuote(path.join(hooksDirectory, 'guard-git-fs.sh')) }],
+        hooks: [{ type: 'command', command: shellQuote(path.join(hooksDirectory, 'guard-git.sh')) }],
       },
     ],
     PermissionRequest: [
@@ -178,9 +212,18 @@ export const evaluateManagedSettings = (settings) => {
     },
     { id: 'kubectl-ask', ok: ask.includes('Bash(kubectl *)'), title: 'kubectl pregunta antes de correr' },
     {
+      id: 'safety-net-hook',
+      ok: (settings?.hooks?.PreToolUse ?? []).some(
+        (entry) =>
+          [undefined, '', '*'].includes(entry?.matcher) &&
+          (entry?.hooks ?? []).some((hook) => isSafetyNetCommand(hook?.command ?? '')),
+      ),
+      title: 'Safety Net revisa cada herramienta antes de que corra',
+    },
+    {
       id: 'git-guard-hook',
-      ok: hookCommands.some((command) => command.includes('guard-git-fs.sh')),
-      title: 'Guardia de git y borrados activo',
+      ok: hookCommands.some((command) => command.includes('guard-git.sh')),
+      title: 'Guardia de git activo (ramas protegidas y método de merge)',
     },
     {
       id: 'permission-log-hook',

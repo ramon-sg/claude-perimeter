@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Tests de hooks/guard-git-fs.sh. El repo es uno falso en un
+# Tests de hooks/guard-git.sh. El repo es uno falso en un
 # directorio temporal, con remoto `origin`, ramas staging/main/feat/x y un
 # worktree vinculado dentro de `.claude/worktrees/`. `gh` es un doble en el
 # PATH: `gh pr view` imprime $GH_BASE, o sale con 1 si GH_FAIL=1. Las raíces
 # temporales del guardia se fijan con GUARD_TEMP_ROOTS a un directorio propio,
 # porque el repo de prueba ya vive bajo el temporal del sistema.
 #
-#   bash hooks/guard-git-fs.test.sh
-#   GUARD_BASH=/bin/bash bash hooks/guard-git-fs.test.sh   # bash 3.2
+#   bash hooks/guard-git.test.sh
+#   GUARD_BASH=/bin/bash bash hooks/guard-git.test.sh   # bash 3.2
 set -u
 
 cd "$(dirname "$0")/.." || exit 1
 unset BASH_ENV CLAUDE_NIGHT_SHIFT GUARD_PROTECTED_BRANCHES GUARD_MERGE_BASES GUARD_EXTRA_SAFE_ROOTS
-HOOK="$PWD/hooks/guard-git-fs.sh"
+HOOK="$PWD/hooks/guard-git.sh"
 SHELL_UNDER_TEST="${GUARD_BASH:-bash}"
 
 failures=0
@@ -54,8 +54,8 @@ ln -s "$outside" "$repo/link"
 # rama de release; release se suma a las protegidas.
 committed='{"mergeBases": ["staging", "main"], "protectedBranches": ["release"]}'
 git -C "$repo" worktree add -q "$tmp/main-checkout" main
-printf '%s\n' "$committed" >"$tmp/main-checkout/.claude-guard.json"
-git -C "$tmp/main-checkout" add .claude-guard.json
+printf '%s\n' "$committed" >"$tmp/main-checkout/.claude-perimeter.json"
+git -C "$tmp/main-checkout" add .claude-perimeter.json
 git -C "$tmp/main-checkout" -c user.email=t@t -c user.name=t commit -q -m config
 git -C "$tmp/main-checkout" push -q origin main
 git -C "$repo" fetch -q origin
@@ -64,7 +64,7 @@ git -C "$repo" fetch -q origin
 git -C "$repo" remote set-url origin https://github.com/test/repo.git
 # La copia de trabajo suma develop a las bases: como el agente puede editarla,
 # eso no tiene que ampliar nada.
-printf '%s\n' '{"mergeBases": ["staging", "main", "develop"], "protectedBranches": ["release"]}' >"$repo/.claude-guard.json"
+printf '%s\n' '{"mergeBases": ["staging", "main", "develop"], "protectedBranches": ["release"]}' >"$repo/.claude-perimeter.json"
 
 # Imprime la decisión del hook (deny|ask|none) para <cwd> <command>.
 decision() {
@@ -131,7 +131,7 @@ assert_eq 'GUARD_PROTECTED_BRANCHES=qa: push a main → none' \
 expect deny 'git push origin master'
 expect deny 'git push origin production'
 expect deny 'git push origin release'
-assert_eq '.claude-guard.json suma ramas aunque GUARD_PROTECTED_BRANCHES cambie' \
+assert_eq '.claude-perimeter.json suma ramas aunque GUARD_PROTECTED_BRANCHES cambie' \
   "$(GUARD_PROTECTED_BRANCHES=qa decision "$repo" 'git push origin release')" deny
 
 echo '── git de red: lo que corre fuera del sandbox no puede ejecutar código propio'
@@ -291,13 +291,13 @@ expect none 'gh pr merge 12 --merge'
 expect none 'gh pr merge --merge'
 expect none 'gh pr merge 12 -m -d'
 expect none 'gh pr merge 12 --merge --delete-branch -b "cuerpo -s"'
-assert_eq 'merge con base main → ask, aunque .claude-guard.json la liste' "$(GH_BASE=main decision "$repo" 'gh pr merge 12 --merge')" ask
+assert_eq 'merge con base main → ask, aunque .claude-perimeter.json la liste' "$(GH_BASE=main decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq 'GUARD_MERGE_BASES=main tampoco la vuelve automática → ask' \
   "$(GH_BASE=main GUARD_MERGE_BASES=main decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq 'merge con gh fallando → ask' "$(GH_FAIL=1 decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq 'GUARD_MERGE_BASES="staging develop": base develop → none' \
   "$(GH_BASE=develop GUARD_MERGE_BASES='staging develop' decision "$repo" 'gh pr merge 12 --merge')" none
-assert_eq 'develop solo en la copia de trabajo de .claude-guard.json → ask' \
+assert_eq 'develop solo en la copia de trabajo de .claude-perimeter.json → ask' \
   "$(GH_BASE=develop decision "$repo" 'gh pr merge 12 --merge')" ask
 assert_eq '-R a otro repo: la configuración de este no aplica → ask' \
   "$(decision "$repo" 'gh pr merge 12 --merge -R otra/org')" ask
@@ -330,103 +330,6 @@ done
 expect none 'gh pr merge 12 --merge -bmsg'
 expect deny 'gh pr merge 12 -bmsg'
 expect none 'gh pr view 12'
-
-echo '── rm y git clean'
-for command in \
-  'rm -rf node_modules' \
-  'rm -rf ./dist apps/web/.next' \
-  'rm -fr build' \
-  'rm -Rf build' \
-  'rm --recursive --force build' \
-  'rm -rf dist/*' \
-  'rm -rf *.log' \
-  'rm -rf no-existe/sub' \
-  'rm -rf apps/../dist' \
-  'rm -rf "$TMPDIR/guard-test"' \
-  'rm -rf ${TMPDIR}/guard-test' \
-  "rm -rf $temporary/guard-test" \
-  'rm -rf $PWD/dist' \
-  'rm -rf dist 2>/dev/null' \
-  'rm -rf dist > /dev/null' \
-  'rm -rf dist 2> /dev/null' \
-  'rm -rf *' \
-  'rm -rf apps/*' \
-  'rm -rf -- dist' \
-  'rm dist/a.txt' \
-  'rm -i dist/a.txt' \
-  'git clean -fd' \
-  'git clean -n' \
-  'git clean -fd apps/web' \
-  'git clean -fd .'; do
-  expect none "$command"
-done
-for command in \
-  'rm -rf ..' \
-  'rm -rf ../outside' \
-  'rm -rf /' \
-  'rm -rf ~' \
-  'rm -rf ~/x' \
-  "rm -rf $tmp" \
-  "rm -rf $temporary" \
-  "rm -rf $temporary/*" \
-  'rm -rf .' \
-  'rm -rf .git' \
-  'rm -rf .git/hooks' \
-  'rm -rf .claude/worktrees/otro' \
-  'rm -rf .claude/worktrees/otro/src' \
-  'rm -rf link/' \
-  'rm -rf link/data' \
-  'rm -rf ../*' \
-  'rm -rf "$SOME_VAR"' \
-  'rm -rf $(pwd)/x' \
-  'rm -rf `pwd`/x' \
-  'find . -name x | xargs rm -rf' \
-  'xargs -I {} rm -rf /' \
-  'xargs -I {} rm -rf {}' \
-  'find . | xargs -n 1 rm -rf' \
-  'xargs -P 4 rm -rf /' \
-  'xargs --max-args 1 rm -rf /' \
-  'xargs -0 rm -rf' \
-  'sudo -u root rm -rf /' \
-  'env -u HOME rm -rf /' \
-  'env -i rm -rf /' \
-  'cd ~ && rm -rf Documents' \
-  'cd /tmp && rm -rf x' \
-  'rm -rf node_modules /' \
-  'git clean -fdx' \
-  'git clean -fX' \
-  'git clean -x -f' \
-  'git clean -fd ..' \
-  'cd .. && git clean -fd' \
-  '(cd ~ && rm -rf Documents)' \
-  '{ cd ~; rm -rf x; }' \
-  'rm -rf .claude/worktrees' \
-  'rm -rf .claude' \
-  'rm -rf .claude/*' \
-  'rm -rf .*' \
-  'rm -rf .git*' \
-  'rm -rf .g?t' \
-  '(rm -rf ..)' \
-  'rm -rf {dist,..}' \
-  '/bin/rm -rf ..' \
-  '\rm -rf ..'; do
-  expect ask "$command"
-done
-expect ask 'rm -rf .git' "$repo/.claude/worktrees/otro"
-expect ask 'rm -rf .*' "$repo/.claude/worktrees/otro"
-assert_eq "GUARD_EXTRA_SAFE_ROOTS=<outside>: rm -rf <outside>/x → none" \
-  "$(GUARD_EXTRA_SAFE_ROOTS="$outside" decision "$repo" "rm -rf $outside/x")" none
-expect none 'rm -rf node_modules' "$repo/.claude/worktrees/otro"
-expect ask 'rm -rf ../../..' "$repo/.claude/worktrees/otro"
-expect ask 'rm -rf ..' "$repo/.claude/worktrees/otro"
-
-echo '── raíces temporales por omisión (cwd fuera de un repo)'
-unset_roots() { GUARD_TEMP_ROOTS= decision / "$1"; }
-# /private/tmp existe solo en macOS (en Linux, preguntar ahí es lo correcto).
-[ -d /private/tmp ] && assert_eq 'rm -rf /private/tmp/guard-test → none' "$(unset_roots 'rm -rf /private/tmp/guard-test')" none
-assert_eq 'rm -rf /tmp/guard-test → none' "$(unset_roots 'rm -rf /tmp/guard-test')" none
-assert_eq 'rm -rf /tmp → ask' "$(unset_roots 'rm -rf /tmp')" ask
-assert_eq 'rm -rf /Users → ask' "$(unset_roots 'rm -rf /Users')" ask
 
 echo '── heredocs'
 expect none "cat > notes.md <<'EOF'
@@ -497,24 +400,16 @@ EOF"
 expect deny "bash <<'EOF'
 git push origin main
 EOF"
-expect ask "cat <<'EOF' | sh
-rm -rf /
-EOF"
 
 echo '── combinaciones y turno nocturno'
-expect deny 'rm -rf .. ; git push origin main'
-expect ask 'rm -rf .. && git push origin feat/x'
+expect deny 'echo hola ; git push origin main'
 assert_eq 'CLAUDE_NIGHT_SHIFT=1: merge con base main → deny' \
   "$(CLAUDE_NIGHT_SHIFT=1 GH_BASE=main decision "$repo" 'gh pr merge 12 --merge')" deny
-assert_eq 'CLAUDE_NIGHT_SHIFT=1: rm -rf / → deny' \
-  "$(CLAUDE_NIGHT_SHIFT=1 decision "$repo" 'rm -rf /')" deny
-assert_eq 'CLAUDE_NIGHT_SHIFT=1: rm -rf dist → none' \
-  "$(CLAUDE_NIGHT_SHIFT=1 decision "$repo" 'rm -rf dist')" none
 reason=$(jq -n '{tool_name: "Bash", tool_input: {command: "git push origin main"}, cwd: "'"$repo"'"}' \
   | "$SHELL_UNDER_TEST" "$HOOK" | jq -r '.hookSpecificOutput.permissionDecisionReason')
 case "$reason" in
-  "guard-git-fs.sh: el push a la rama protegida main"*"Comando: git push origin main") assert_eq 'motivo con script y comando' ok ok ;;
-  *) assert_eq 'motivo con script y comando' "$reason" 'guard-git-fs.sh: el push a la rama protegida main…' ;;
+  "guard-git.sh: el push a la rama protegida main"*"Comando: git push origin main") assert_eq 'motivo con script y comando' ok ok ;;
+  *) assert_eq 'motivo con script y comando' "$reason" 'guard-git.sh: el push a la rama protegida main…' ;;
 esac
 
 echo '── entrada'

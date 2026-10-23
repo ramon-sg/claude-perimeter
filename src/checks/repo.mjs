@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { commandExists, run } from '../exec.mjs';
 
-export const CONFIG_FILE_NAME = '.claude-guard.json';
+export const CONFIG_FILE_NAME = '.claude-perimeter.json';
 export const DEFAULT_PROTECTED_BRANCHES = ['main', 'master', 'staging', 'production'];
 /** Ramas que nunca se mergean sin preguntar, diga lo que diga el repo. */
 export const RELEASE_BRANCHES = ['main', 'master', 'production'];
@@ -75,7 +75,7 @@ const configChecks = (toplevel) => {
         status: 'warn',
         title: `Sin ${CONFIG_FILE_NAME}: rigen las ramas protegidas por omisión`,
         detail: DEFAULT_PROTECTED_BRANCHES.join(', '),
-        fix: 'Corre: npx github:ramon-sg/claude-guard init',
+        fix: 'Corre: npx github:ramon-sg/claude-perimeter init',
       },
     ];
   }

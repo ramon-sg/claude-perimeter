@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Hook PreToolUse de Claude Code (matcher: Bash) que protege las ramas git
-# compartidas y el sistema de archivos fuera del worktree actual.
+# compartidas y cuida los comandos que corren fuera del sandbox (git de red,
+# gh). Los borrados y comandos destructivos en general los frena Safety Net.
 #
 # Decisiones:
 #   deny  - push a una rama protegida, todo push forzado y todo `gh pr merge`
 #           que no sea merge commit (o que use --admin).
 #   ask   - `gh pr merge --merge` cuya base no es una base de merge permitida
-#           (o no se puede resolver), `gh api .../merge`, y `rm -r/-f` o
-#           `git clean -f` con una ruta fuera del worktree y de los
-#           directorios temporales, o con una ruta que no se puede resolver.
+#           (o no se puede resolver) y `gh api .../merge`.
 #   none  - todo lo demás: decide el flujo normal de permisos.
 # Si varios segmentos de un mismo comando deciden, deny gana sobre ask.
 # Con CLAUDE_NIGHT_SHIFT=1 todo ask pasa a deny: nadie puede responderlo.
@@ -18,15 +17,16 @@
 #   GUARD_MERGE_BASES         bases de PR que se mergean sin preguntar (default "staging")
 #   GUARD_TEMP_ROOTS          raíces temporales separadas por ":" (default
 #                             "$TMPDIR:/tmp:/private/tmp:/private/var/folders")
-#   GUARD_EXTRA_SAFE_ROOTS    raíces extra separadas por ":" donde rm/clean está bien
+#   GUARD_EXTRA_SAFE_ROOTS    raíces extra separadas por ":" donde gh y git
+#                             pueden leer o escribir archivos
 #
-# Raíces seguras para rm/clean: estrictamente dentro de la raíz del worktree
-# (no la raíz misma, no dentro del git dir, no dentro de otro worktree anidado
-# en ella) o estrictamente dentro de una de las raíces temporales.
+# Rutas seguras para los archivos que suben gh o escribe git de red:
+# estrictamente dentro de la raíz del worktree (no dentro del git dir ni de otro
+# worktree anidado en ella) o dentro de una de las raíces temporales.
 #
 # Es una heurística sobre el texto, no un parser de shell. Lo que no puede leer
-# con confianza (variables, sustitución de comandos, un `cd` antes en el
-# comando, xargs) pregunta en vez de dejarlo pasar.
+# con confianza (variables, sustitución de comandos) pregunta en vez de dejarlo
+# pasar.
 #
 # Uso: regístralo como hook PreToolUse de Bash, o cárgalo con `source` para
 # reusar guard_segments, guard_decide y guard_emit desde otro hook.
@@ -38,23 +38,23 @@ GUARD_DEFAULT_PROTECTED_BRANCHES="main master staging production"
 GUARD_RELEASE_BRANCHES="main master production"
 
 # Imprime la lista <key> (protectedBranches o mergeBases), separada por
-# espacios, del .claude-guard.json en la raíz del repo que contiene <directory>.
+# espacios, del .claude-perimeter.json en la raíz del repo que contiene <directory>.
 guard_repo_list() {
   local toplevel file
   toplevel="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 0
-  file="$toplevel/.claude-guard.json"
+  file="$toplevel/.claude-perimeter.json"
   [ -f "$file" ] || return 0
   jq -r --arg key "$2" '.[$key] // [] | .[] | strings' "$file" 2>/dev/null | tr '\n' ' '
 }
 
-# Igual que guard_repo_list, pero leyendo el .claude-guard.json commiteado en
+# Igual que guard_repo_list, pero leyendo el .claude-perimeter.json commiteado en
 # la primera rama de release que exista en origin (main o master), donde el
 # agente no puede pushear. Para lo que afloja reglas, como mergeBases.
 guard_committed_repo_list() {
   local reference
   for reference in origin/main origin/master; do
-    if git -C "$1" cat-file -e "$reference:.claude-guard.json" 2>/dev/null; then
-      git -C "$1" show "$reference:.claude-guard.json" 2>/dev/null \
+    if git -C "$1" cat-file -e "$reference:.claude-perimeter.json" 2>/dev/null; then
+      git -C "$1" show "$reference:.claude-perimeter.json" 2>/dev/null \
         | jq -r --arg key "$2" '.[$key] // [] | .[] | strings' 2>/dev/null | tr '\n' ' '
       return 0
     fi
@@ -883,120 +883,6 @@ guard_decide_merge() {
   printf 'ask%sel merge a %s necesita el OK de una persona' "$GUARD_TAB" "$base"
 }
 
-# Decide un segmento rm o git clean. Argumentos: índice de inicio, cwd, si
-# corrió un cd antes en el comando, si el comando tiene sustituciones.
-guard_decide_delete() {
-  local index="$1" cwd="$2" moved="$3" substituted="$4" count=${#GUARD_TOKENS[@]} token kind destructive=0 options=1
-  local directory="$2" paths=() path resolved mode literal prefix pattern
-  if [ "${GUARD_TOKENS[$index]}" = "rm" ]; then
-    kind=rm
-    index=$((index + 1))
-  else
-    kind=clean
-    index=$((index + 1))
-    while [ "$index" -lt "$count" ]; do
-      token="${GUARD_TOKENS[$index]}"
-      case "$token" in
-        -C)
-          index=$((index + 1))
-          case "${GUARD_TOKENS[$index]:-}" in /*) directory="${GUARD_TOKENS[$index]}" ;; *) directory="$directory/${GUARD_TOKENS[$index]:-}" ;; esac
-          ;;
-        -c) index=$((index + 1)) ;;
-        -*) ;;
-        *) break ;;
-      esac
-      index=$((index + 1))
-    done
-    [ "${GUARD_TOKENS[$index]:-}" = "clean" ] || return 0
-    index=$((index + 1))
-  fi
-  while [ "$index" -lt "$count" ]; do
-    token="${GUARD_TOKENS[$index]}"
-    case "$token" in
-      '>' | '>>' | '<' | [0-9]'>' | [0-9]'>>' | [0-9]'<')
-        index=$((index + 2))
-        continue
-        ;;
-    esac
-    if [ "$options" = "1" ]; then
-      case "$token" in
-        --) options=0; index=$((index + 1)); continue ;;
-        --recursive | --force) destructive=1 ;;
-        -e | --exclude) [ "$kind" = "clean" ] && index=$((index + 1)) ;;
-        --*) ;;
-        -*)
-          case "$kind:$token" in
-            clean:*[xX]*)
-              printf 'ask%sgit clean %s también borra archivos ignorados, como .env' "$GUARD_TAB" "$token"
-              return 0
-              ;;
-            rm:*[rRf]* | clean:*f*) destructive=1 ;;
-          esac
-          ;;
-        *[\<\>]*) ;;
-        *) paths+=("$index") ;;
-      esac
-    else
-      paths+=("$index")
-    fi
-    index=$((index + 1))
-  done
-  [ "$destructive" = "1" ] || return 0
-  if [ "$substituted" = "1" ] || [ "$GUARD_VIA_XARGS" = "1" ]; then
-    printf 'ask%s%s con rutas armadas en tiempo de ejecución (sustitución o xargs)' "$GUARD_TAB" "$kind"
-    return 0
-  fi
-  if [ "${#paths[@]}" -eq 0 ]; then
-    if [ "$kind" = "rm" ]; then
-      printf 'ask%srm sin una ruta visible' "$GUARD_TAB"
-      return 0
-    fi
-    if [ "$moved" = "1" ]; then
-      printf 'ask%sgit clean después de cd: no se puede saber el directorio' "$GUARD_TAB"
-      return 0
-    fi
-    resolved="$(guard_resolve_path "$directory" "$cwd")" && guard_path_is_safe "$resolved" "$cwd" clean && return 0
-    printf 'ask%sgit clean fuera del worktree (%s)' "$GUARD_TAB" "$directory"
-    return 0
-  fi
-  for index in "${paths[@]}"; do
-    path="${GUARD_TOKENS[$index]}"
-    if guard_token_is_dynamic "$index" && ! [[ "$path" =~ $GUARD_KNOWN_VARIABLE_PATH ]]; then
-      printf 'ask%s%s con una ruta con variable (%s)' "$GUARD_TAB" "$kind" "$path"
-      return 0
-    fi
-    case "$path" in
-      /* | '$'*) ;;
-      *)
-        if [ "$moved" = "1" ]; then
-          printf 'ask%s%s con una ruta relativa después de cd (%s)' "$GUARD_TAB" "$kind" "$path"
-          return 0
-        fi
-        ;;
-    esac
-    if ! resolved="$(guard_resolve_path "$path" "$directory")"; then
-      printf 'ask%s%s con una ruta que no se puede resolver (%s)' "$GUARD_TAB" "$kind" "$path"
-      return 0
-    fi
-    mode=exact
-    [ "$kind" = "clean" ] && mode=clean
-    case "$path" in
-      *'*'* | *'?'* | *'['*)
-        literal="${path%%[*?[]*}"
-        prefix=""
-        case "$literal" in */*) prefix="${literal%/*}/" ;; esac
-        pattern="${path#"$prefix"}"
-        mode="glob:${pattern%%/*}"
-        ;;
-    esac
-    if ! guard_path_is_safe "$resolved" "$cwd" "$mode"; then
-      printf 'ask%s%s fuera del worktree y de los directorios temporales (%s)' "$GUARD_TAB" "$kind" "$path"
-      return 0
-    fi
-  done
-  return 0
-}
-
 # Imprime "ask<TAB>motivo" si una sustitución de comando ($( … ) o backticks)
 # arma el subcomando de git o gh, o los argumentos de git push, gh pr merge o
 # gh api: el guard no puede ver a qué se expanden. Otros usos
@@ -1060,7 +946,7 @@ guard_decide_substitutions() {
 # Imprime "deny<TAB>motivo", "ask<TAB>motivo" o nada para <command> corrido en
 # <cwd>. Se revisa cada segmento; deny gana sobre ask.
 guard_decide() {
-  local command="$1" cwd="$2" segments segment start word decision first_ask="" moved=0 substituted=0 filtered
+  local command="$1" cwd="$2" segments segment start word decision first_ask="" substituted=0 filtered
   filtered="$(guard_filter_heredocs "$command" executed)"
   case "$filtered" in *'$('* | *'`'*) substituted=1 ;; esac
   [ "$substituted" = "1" ] && first_ask="$(guard_decide_substitutions "$filtered")"
@@ -1107,7 +993,6 @@ guard_decide() {
     esac
     [ -n "$decision" ] && word=""
     case "$word" in
-      cd | pushd | popd) moved=1 ;;
       git)
         decision="$(guard_decide_git_network "$start" "$cwd")"
         if [ -z "$decision" ] && ! guard_expand_git_alias "$start" "$cwd"; then
@@ -1115,7 +1000,6 @@ guard_decide() {
         fi
         [ -z "$decision" ] && case " ${GUARD_TOKENS[*]:$start} " in
           *" push "*) decision="$(guard_decide_push "$start" "$cwd")" ;;
-          *" clean "*) decision="$(guard_decide_delete "$start" "$cwd" "$moved" "$substituted")" ;;
         esac
         ;;
       gh)
@@ -1128,7 +1012,6 @@ guard_decide() {
           decision="$(guard_decide_gh_api "$start")"
         fi
         ;;
-      rm) decision="$(guard_decide_delete "$start" "$cwd" "$moved" "$substituted")" ;;
     esac
     case "$decision" in
       deny"$GUARD_TAB"*)
@@ -1164,11 +1047,11 @@ guard_main() {
   local input tool_name command cwd result
   input="$(cat)"
   if ! command -v jq >/dev/null 2>&1; then
-    echo "[guard-git-fs] jq no está instalado; se bloquea porque no se puede inspeccionar el comando." >&2
+    echo "[guard-git] jq no está instalado; se bloquea porque no se puede inspeccionar el comando." >&2
     exit 2
   fi
   if ! tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)"; then
-    echo "[guard-git-fs] no se pudo interpretar la entrada del hook; se bloquea." >&2
+    echo "[guard-git] no se pudo interpretar la entrada del hook; se bloquea." >&2
     exit 2
   fi
   [ "$tool_name" = "Bash" ] || exit 0
@@ -1178,7 +1061,7 @@ guard_main() {
   [ -n "$cwd" ] || cwd="$PWD"
   result="$(guard_decide "$command" "$cwd")"
   [ -n "$result" ] || exit 0
-  guard_emit "${result%%"$GUARD_TAB"*}" "${result#*"$GUARD_TAB"}" "$command" "guard-git-fs.sh"
+  guard_emit "${result%%"$GUARD_TAB"*}" "${result#*"$GUARD_TAB"}" "$command" "guard-git.sh"
   exit 0
 }
 

@@ -3,12 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { commandExists, run } from '../exec.mjs';
 import { evaluateManagedSettings } from '../managed-settings.mjs';
-import { PACKAGE_ROOT, installPaths, platformName } from '../platform.mjs';
+import { PACKAGE_ROOT, bundledSafetyNetDirectory, installPaths, platformName } from '../platform.mjs';
 import { linuxDockerChecks, macosDockerChecks } from './docker.mjs';
+import { safetyNetChecks, safetyNetVersion } from './safety-net.mjs';
 
-export const HOOK_FILES = ['guard-git-fs.sh', 'log-permission-request.sh'];
+export const HOOK_FILES = ['guard-git.sh', 'log-permission-request.sh'];
 
-const SETUP_FIX = 'Corre: npx github:ramon-sg/claude-guard setup';
+const SETUP_FIX = 'Corre: npx github:ramon-sg/claude-perimeter setup';
 
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
@@ -46,7 +47,7 @@ const managedSettingsChecks = (paths) => {
       {
         id: 'managed-settings',
         status: 'fail',
-        title: 'Falta la configuración de claude-guard en los managed settings',
+        title: 'Falta la configuración de claude-perimeter en los managed settings',
         detail: paths.dropInFile,
         fix: SETUP_FIX,
       },
@@ -60,7 +61,7 @@ const managedSettingsChecks = (paths) => {
       {
         id: 'managed-settings',
         status: 'fail',
-        title: 'La configuración de claude-guard no es JSON válido: Claude Code no va a arrancar',
+        title: 'La configuración de claude-perimeter no es JSON válido: Claude Code no va a arrancar',
         detail: paths.dropInFile,
         fix: SETUP_FIX,
       },
@@ -96,7 +97,7 @@ const hookFileChecks = (paths) =>
       return { id: `hook-${name}`, status: 'fail', title: `El hook ${name} no es de root: el agente podría editarlo`, fix: SETUP_FIX };
     }
     if (sha256(installed) !== sha256(path.join(PACKAGE_ROOT, 'hooks', name))) {
-      return { id: `hook-${name}`, status: 'warn', title: `El hook ${name} es de otra versión de claude-guard`, fix: SETUP_FIX };
+      return { id: `hook-${name}`, status: 'warn', title: `El hook ${name} es de otra versión de claude-perimeter`, fix: SETUP_FIX };
     }
     return { id: `hook-${name}`, status: 'ok', title: `Hook ${name} instalado y al día` };
   });
@@ -159,11 +160,18 @@ export const machineChecks = ({ platform, home }) => {
   if (paths === undefined) {
     return [{ id: 'platform', status: 'fail', title: `${platformName(platform)} no está soportado: solo macOS y Linux` }];
   }
+  let settings;
+  try {
+    settings = JSON.parse(fs.readFileSync(paths.dropInFile, 'utf8'));
+  } catch {
+    // managedSettingsChecks ya dice qué pasa con el archivo.
+  }
   return [
     { id: 'platform', status: 'ok', title: `Plataforma: ${platformName(platform)}` },
     ...toolChecks(home),
     ...managedSettingsChecks(paths),
     ...hookFileChecks(paths),
+    ...safetyNetChecks(paths, settings, safetyNetVersion(bundledSafetyNetDirectory())),
     sudoCheck(),
     ...(platform === 'linux' ? linuxSandboxChecks() : []),
     ...(platform === 'darwin' ? macosDockerChecks(home) : linuxDockerChecks()),

@@ -3,7 +3,14 @@ import { describe, it } from 'node:test';
 import { buildManagedSettings, evaluateManagedSettings, shellQuote } from '../src/managed-settings.mjs';
 
 const build = (platform = 'darwin') =>
-  buildManagedSettings({ platform, home: '/Users/ana', hooksDirectory: '/Library/Application Support/ClaudeCode/claude-guard/hooks' });
+  buildManagedSettings({
+    platform,
+    home: '/Users/ana',
+    hooksDirectory: '/Library/Application Support/ClaudeCode/claude-perimeter/hooks',
+    nodePath: '/opt/node/bin/node',
+    safetyNetDirectory: '/Library/Application Support/ClaudeCode/claude-perimeter/cc-safety-net',
+    safetyNetHome: '/Library/Application Support/ClaudeCode/claude-perimeter/cc-safety-net-home',
+  });
 
 describe('buildManagedSettings', () => {
   it('cierra la salida del sandbox y no arranca sin él', () => {
@@ -47,9 +54,9 @@ describe('buildManagedSettings', () => {
   it('fuera del proyecto, solo deja escribir en los cachés propios del agente', () => {
     for (const platform of ['darwin', 'linux']) {
       const settings = build(platform);
-      assert.deepEqual(settings.sandbox.filesystem.allowWrite, ['/Users/ana/.cache/claude-guard'], platform);
-      assert.equal(settings.env.npm_config_cache, '/Users/ana/.cache/claude-guard/npm');
-      assert.equal(settings.env.npm_config_store_dir, '/Users/ana/.cache/claude-guard/pnpm-store');
+      assert.deepEqual(settings.sandbox.filesystem.allowWrite, ['/Users/ana/.cache/claude-perimeter'], platform);
+      assert.equal(settings.env.npm_config_cache, '/Users/ana/.cache/claude-perimeter/npm');
+      assert.equal(settings.env.npm_config_store_dir, '/Users/ana/.cache/claude-perimeter/pnpm-store');
       assert.ok(settings.sandbox.filesystem.denyWrite.includes('~/.npm/_npx'), platform);
       assert.ok(settings.sandbox.filesystem.denyWrite.includes('~/.claude'), platform);
     }
@@ -64,8 +71,19 @@ describe('buildManagedSettings', () => {
   });
 
   it('registra los hooks con la ruta entre comillas (tiene espacios)', () => {
-    const command = build().hooks.PreToolUse[0].hooks[0].command;
-    assert.equal(command, "'/Library/Application Support/ClaudeCode/claude-guard/hooks/guard-git-fs.sh'");
+    const guard = build().hooks.PreToolUse.find((entry) => entry.matcher === 'Bash');
+    assert.equal(guard.hooks[0].command, "'/Library/Application Support/ClaudeCode/claude-perimeter/hooks/guard-git.sh'");
+  });
+
+  it('registra Safety Net sin matcher, con la copia y la configuración de root', () => {
+    const [safetyNet] = build().hooks.PreToolUse;
+    assert.equal(safetyNet.matcher, undefined);
+    assert.equal(
+      safetyNet.hooks[0].command,
+      "CC_SAFETY_NET_HOME='/Library/Application Support/ClaudeCode/claude-perimeter/cc-safety-net-home' " +
+        "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY=1 '/opt/node/bin/node' " +
+        "'/Library/Application Support/ClaudeCode/claude-perimeter/cc-safety-net/dist/bin/cc-safety-net.js' hook --claude-code",
+    );
   });
 
   it('lo que arma pasa su propia evaluación', () => {
@@ -88,6 +106,12 @@ describe('evaluateManagedSettings', () => {
     delete settings.sandbox.allowUnsandboxedCommands;
     const rule = evaluateManagedSettings(settings).find((entry) => entry.id === 'sandbox-no-escape');
     assert.equal(rule.ok, false);
+  });
+
+  it('Safety Net con un matcher no cuenta: dejaría fuera Read, Edit y el resto', () => {
+    const settings = build();
+    settings.hooks.PreToolUse[0].matcher = 'Bash';
+    assert.equal(evaluateManagedSettings(settings).find((rule) => rule.id === 'safety-net-hook').ok, false);
   });
 
   it('acepta ~/.kube/ con barra final', () => {

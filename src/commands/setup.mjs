@@ -6,7 +6,8 @@ import { HOOK_FILES } from '../checks/machine.mjs';
 import { dockerProvider } from '../checks/docker.mjs';
 import { commandExists, run, runInteractive } from '../exec.mjs';
 import { buildManagedSettings } from '../managed-settings.mjs';
-import { PACKAGE_ROOT, installPaths, platformName, userHome } from '../platform.mjs';
+import { PACKAGE_ROOT, bundledSafetyNetDirectory, installPaths, platformName, userHome } from '../platform.mjs';
+import { safetyNetVersion } from '../checks/safety-net.mjs';
 import { doctor } from './doctor.mjs';
 
 /** Perfil de AppArmor que deja a bubblewrap crear su aislamiento (Ubuntu 24.04+). */
@@ -34,6 +35,25 @@ const confirm = async (question, assumeYes) => {
   return /^(s|si|sí|y|yes)$/i.test(answer.trim());
 };
 
+/**
+ * ¿<nodePath> arranca copiado a otra carpeta? Lo prueba en un temporal.
+ *
+ * @param {string} nodePath
+ */
+const nodeRunsWhenCopied = (nodePath) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-perimeter-node-'));
+  try {
+    const copy = path.join(directory, 'node');
+    fs.copyFileSync(nodePath, copy);
+    fs.chmodSync(copy, 0o755);
+    return run(copy, ['-e', 'process.stdout.write(process.version)']).stdout === process.version;
+  } catch {
+    return false;
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+};
+
 /** Corre un paso con sudo y corta si falla. */
 const sudo = (args) => {
   const code = runInteractive('sudo', args);
@@ -41,7 +61,7 @@ const sudo = (args) => {
 };
 
 const writeTemporary = (name, content) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-guard-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-perimeter-'));
   const file = path.join(directory, name);
   fs.writeFileSync(file, content);
   return file;
@@ -117,7 +137,7 @@ const macosManualSteps = () => {
 };
 
 /**
- * `claude-guard setup`: instala la configuración de máquina. Pide sudo para
+ * `claude-perimeter setup`: instala la configuración de máquina. Pide sudo para
  * escribir en la carpeta de sistema de Claude Code: ese es el punto, el agente
  * no puede editar lo que queda ahí.
  *
@@ -127,7 +147,7 @@ export const setup = async (options) => {
   const platform = process.platform;
   const paths = installPaths(platform);
   if (paths === undefined) {
-    process.stderr.write(`claude-guard: ${platformName(platform)} no está soportado (solo macOS y Linux).\n`);
+    process.stderr.write(`claude-perimeter: ${platformName(platform)} no está soportado (solo macOS y Linux).\n`);
     return 1;
   }
 
@@ -138,14 +158,49 @@ export const setup = async (options) => {
     sudo(['rm', '-f', paths.dropInFile]);
     sudo(['rm', '-rf', path.dirname(paths.hooksDirectory)]);
     runInteractive('sudo', ['-k']);
-    process.stdout.write('Listo: claude-guard quedó desinstalado de esta máquina.\n');
+    process.stdout.write('Listo: claude-perimeter quedó desinstalado de esta máquina.\n');
     return 0;
   }
 
-  const settings = buildManagedSettings({ platform, home: userHome(), hooksDirectory: paths.hooksDirectory });
+  // El hook de Safety Net corre con una copia de root del node con que corres
+  // setup: si usara tu node (en ~/.asdf o Homebrew), cambiarlo desarmaría el
+  // hook. Un node que depende de librerías propias no arranca copiado suelto;
+  // ahí se usa el original y el doctor lo avisa.
+  const nodeCopyWorks = nodeRunsWhenCopied(process.execPath);
+  const settings = buildManagedSettings({
+    platform,
+    home: userHome(),
+    hooksDirectory: paths.hooksDirectory,
+    nodePath: nodeCopyWorks ? paths.nodeFile : process.execPath,
+    safetyNetDirectory: paths.safetyNetDirectory,
+    safetyNetHome: paths.safetyNetHome,
+  });
   const settingsJson = `${JSON.stringify(settings, null, 2)}\n`;
   const group = rootGroup(platform);
+  const safetyNetSource = bundledSafetyNetDirectory();
   const steps = [
+    nodeCopyWorks
+      ? {
+          description: `Copiar node (${process.version}) a ${paths.nodeFile} (de root, lo usa Safety Net)`,
+          run: () => {
+            sudo(['mkdir', '-p', path.dirname(paths.nodeFile)]);
+            sudo(['install', '-m', '0755', '-o', 'root', '-g', group, process.execPath, paths.nodeFile]);
+          },
+        }
+      : {
+          description: `Usar ${process.execPath} para Safety Net: copiado suelto no arranca, y no es de root (el doctor lo avisa)`,
+          run: () => {},
+        },
+    {
+      description: `Copiar Safety Net ${safetyNetVersion(safetyNetSource)} a ${paths.safetyNetDirectory} (de root)`,
+      run: () => {
+        sudo(['rm', '-rf', paths.safetyNetDirectory]);
+        sudo(['mkdir', '-p', path.dirname(paths.safetyNetDirectory), paths.safetyNetHome]);
+        sudo(['cp', '-R', safetyNetSource, paths.safetyNetDirectory]);
+        sudo(['chown', '-R', `root:${group}`, paths.safetyNetDirectory, paths.safetyNetHome]);
+        sudo(['chmod', '-R', 'go-w', paths.safetyNetDirectory, paths.safetyNetHome]);
+      },
+    },
     {
       description: `Copiar los hooks a ${paths.hooksDirectory} (de root)`,
       run: () => {
@@ -164,7 +219,7 @@ export const setup = async (options) => {
     ...(platform === 'linux' ? linuxSteps() : macosSteps()),
   ];
 
-  process.stdout.write(`claude-guard setup (${platformName(platform)})\n\nPasos:\n`);
+  process.stdout.write(`claude-perimeter setup (${platformName(platform)})\n\nPasos:\n`);
   for (const step of steps) process.stdout.write(`  • ${step.description}${step.optional ? ' (opcional)' : ''}\n`);
   if (options.dryRun) {
     process.stdout.write(`\nContenido de ${paths.dropInFile}:\n${settingsJson}`);
@@ -183,7 +238,7 @@ export const setup = async (options) => {
       step.run();
     }
   } catch (error) {
-    process.stderr.write(`\nclaude-guard setup se detuvo: ${error.message}\n`);
+    process.stderr.write(`\nclaude-perimeter setup se detuvo: ${error.message}\n`);
     return 1;
   } finally {
     // Olvida la contraseña de sudo: si quedara recordada, un comando del agente
