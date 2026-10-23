@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { dockerProvider, evaluateFileSharing } from '../src/checks/docker.mjs';
 import { broadAllowRules, evaluateBranchRules, parseGithubRemote } from '../src/checks/repo.mjs';
-import { suggestedMergeBases } from '../src/commands/init.mjs';
+import { buildConfig, describeConfig, parseBranchList, suggestedMergeBases } from '../src/commands/init.mjs';
 import { renderReport } from '../src/report.mjs';
 
 describe('dockerProvider', () => {
@@ -78,6 +78,39 @@ describe('evaluateBranchRules', () => {
 describe('suggestedMergeBases', () => {
   it('sugiere staging y nunca una rama de release', () => {
     assert.deepEqual(suggestedMergeBases(['main', 'staging', 'feat/x', 'production', 'HEAD']), ['staging']);
+  });
+});
+
+describe('parseBranchList', () => {
+  it('separa por comas o espacios y quita repetidas', () => {
+    assert.deepEqual(parseBranchList('qa, release/1.0  qa'), { branches: ['qa', 'release/1.0'], invalid: [] });
+    assert.deepEqual(parseBranchList(''), { branches: [], invalid: [] });
+  });
+
+  it('marca lo que no es un nombre de rama', () => {
+    assert.deepEqual(parseBranchList('qa -rf ~/x').invalid, ['-rf', '~/x']);
+  });
+});
+
+describe('buildConfig', () => {
+  it('saca las ramas de release de mergeBases y las protegidas por omisión de protectedBranches', () => {
+    const { config, ignored } = buildConfig({ protectedBranches: ['main', 'qa'], mergeBases: ['staging', 'main'] });
+    assert.deepEqual(ignored, ['main']);
+    assert.deepEqual(config.mergeBases, ['staging']);
+    assert.deepEqual(config.protectedBranches, ['qa']);
+  });
+});
+
+describe('describeConfig', () => {
+  it('explica qué se protege, hacia dónde mergea y desde cuándo aplica', () => {
+    const text = describeConfig({ protectedBranches: ['qa'], mergeBases: ['staging'] });
+    assert.match(text, /main, master, staging, production, qa/);
+    assert.match(text, /mergea sin preguntarte a: staging/);
+    assert.match(text, /origin\/main/);
+  });
+
+  it('sin mergeBases dice que todo merge pregunta', () => {
+    assert.match(describeConfig({ protectedBranches: [], mergeBases: [] }), /te pregunta antes de cada merge/);
   });
 });
 

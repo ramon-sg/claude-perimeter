@@ -1,6 +1,6 @@
 {
   "name": "@ramon-sg/claude-guard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Barandas para Claude Code: sandbox del sistema operativo, reglas de git y un doctor que muestra qué falta.",
   "type": "module",
   "bin": {
