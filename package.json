@@ -1,7 +1,7 @@
 {
   "name": "@ramon-sg/claude-perimeter",
-  "version": "0.2.0",
-  "description": "Barandas para Claude Code: sandbox del sistema operativo, reglas de git y un doctor que muestra qué falta.",
+  "version": "0.3.0",
+  "description": "Barandas para Claude Code: sandbox del sistema operativo, Safety Net, reglas de git y un doctor que muestra qué falta.",
   "type": "module",
   "bin": {
     "claude-perimeter": "bin/claude-perimeter.mjs"
@@ -15,7 +15,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test 'test/*.test.mjs' && bash hooks/guard-git-fs.test.sh && bash hooks/log-permission-request.test.sh"
+    "test": "node --test 'test/*.test.mjs' && bash hooks/guard-git.test.sh && bash hooks/log-permission-request.test.sh"
   },
   "engines": {
     "node": ">=20"
@@ -31,5 +31,8 @@
     "git",
     "kubernetes"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "cc-safety-net": "2.6.18"
+  }
 }

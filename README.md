@@ -3,12 +3,12 @@
 Barandas para [Claude Code](https://code.claude.com): que el agente pueda trabajar solo, commitear, pushear a su rama, correr tests y abrir PRs, sin poder romper lo que no tiene vuelta atrás, como un push a `main`, un borrado fuera del proyecto o un cambio en tu cluster de producción.
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.2.0 setup    # configura la máquina (pide sudo)
-npx github:ramon-sg/claude-perimeter#v0.2.0 init     # configura el repo donde estás
-npx github:ramon-sg/claude-perimeter#v0.2.0 doctor   # muestra qué falta
+npx github:ramon-sg/claude-perimeter#v0.3.0 setup    # configura la máquina (pide sudo)
+npx github:ramon-sg/claude-perimeter#v0.3.0 init     # configura el repo donde estás
+npx github:ramon-sg/claude-perimeter#v0.3.0 doctor   # muestra qué falta
 ```
 
-No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.2.0` fija la versión, para que lo que se instala no cambie solo.
+No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.3.0` fija la versión, para que lo que se instala no cambie solo.
 
 ---
 
@@ -20,7 +20,8 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 - **Lo que hace claude-perimeter.** Mueve el control a donde el agente no llega:
   - **El sistema operativo** (el sandbox de Claude Code) bloquea que cualquier comando del agente, y cualquier proceso que ese comando lance, lea tus credenciales.
   - **Los managed settings**, un archivo de sistema propiedad de root, guardan esa configuración donde el agente no puede editarla.
-  - **Un guardia de git** rechaza push a ramas protegidas, push forzado y merges que no son merge commit.
+  - **[Safety Net](https://github.com/kenryu42/cc-safety-net)**, mantenido por otros, revisa cada herramienta antes de que corra y frena lo destructivo: `rm -rf` fuera de lugar, `git reset --hard`, `git clean -f`, `curl … | bash`, también escondido en un `bash -c` o un `python3 -c`.
+  - **Un guardia de git** rechaza push a ramas protegidas, push forzado y merges que no son merge commit, que Safety Net no cubre.
 - **El doctor** te dice en una pantalla qué está bien y qué falta, con el paso para arreglar cada cosa.
 
 ## Qué protege y qué no
@@ -32,7 +33,8 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 | Cambiar algo en Kubernetes | `kubectl` y `helm` preguntan antes de cada uso (`ask`) | No: es el único camino que tiene la credencial |
 | Pushear a `main`, `master`, `staging` o `production` | Guardia de git | Es un filtro de texto: atrapa equivocaciones, no intentos deliberados. La garantía es la protección de ramas en GitHub, que el doctor revisa |
 | Push forzado, merge con squash o rebase | Guardia de git | Igual que la fila anterior |
-| `rm -rf` fuera del proyecto | Guardia de git y archivos, y además el sandbox (solo se escribe en el proyecto y los temporales) | El sandbox no se salta |
+| `rm -rf` fuera del proyecto | Safety Net, y además el sandbox (solo se escribe en el proyecto y los temporales) | El sandbox no se salta |
+| Perder trabajo sin commitear (`git reset --hard`, `git checkout -- .`, `git clean -f`, `git stash drop`) o correr un script de internet (`curl … \| bash`) | Safety Net los rechaza | Entiende lo que hace el comando, no solo el texto, así que reordenar opciones o envolverlo no basta. Igual es un filtro: atrapa equivocaciones, no intentos deliberados |
 | Que el agente desarme todo esto | Los managed settings y los hooks son de root | Solo con `sudo`: el doctor avisa si `sudo` no pide contraseña |
 
 **Lo que no cubre** está en [Límites conocidos](#límites-conocidos).
@@ -48,18 +50,19 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 ## `setup`: la máquina
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.2.0 setup --dry-run   # muestra qué haría, sin tocar nada
-npx github:ramon-sg/claude-perimeter#v0.2.0 setup             # lo hace (pide tu contraseña de sudo)
+npx github:ramon-sg/claude-perimeter#v0.3.0 setup --dry-run   # muestra qué haría, sin tocar nada
+npx github:ramon-sg/claude-perimeter#v0.3.0 setup             # lo hace (pide tu contraseña de sudo)
 ```
 
-Instala dos cosas en la carpeta de sistema de Claude Code (`/Library/Application Support/ClaudeCode/` en macOS, `/etc/claude-code/` en Linux):
+Instala tres cosas en la carpeta de sistema de Claude Code (`/Library/Application Support/ClaudeCode/` en macOS, `/etc/claude-code/` en Linux):
 
 1. **`managed-settings.d/50-claude-perimeter.json`**, un archivo propio. Si ya tienes un `managed-settings.json`, no lo toca: Claude Code combina los dos.
 2. **`claude-perimeter/hooks/`**, con el guardia de git y el registro de preguntas, propiedad de root.
+3. **`claude-perimeter/cc-safety-net/`**, una copia de Safety Net en la versión que fija este paquete, propiedad de root. Ver [Safety Net](#safety-net).
 
 Al terminar corre `sudo -k`, para que la contraseña de sudo no quede recordada y un comando del agente no pueda usarla.
 
-Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.2.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-perimeter.mjs setup`.
+Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.3.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-perimeter.mjs setup`.
 
 ### Lo que configura, pieza por pieza
 
@@ -78,7 +81,7 @@ Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre c
 | `sandbox.network.allowedDomains` | npm y GitHub | Dominios que los comandos del sandbox usan sin preguntar |
 | `sandbox.network.allowUnixSockets` | macOS: el socket de Docker Desktop. Linux: ninguno | En macOS los tests con Docker corren dentro del sandbox, y lo que un contenedor puede montar lo decide Docker Desktop. En Linux, ver [Docker](#docker) |
 | `sandbox.network.allowLocalBinding` | `true` | Servidores de desarrollo y tests que escuchan en un puerto local |
-| `hooks` | guardia de git y registro de preguntas | Ver más abajo |
+| `hooks` | Safety Net (sin `matcher`, revisa toda herramienta), guardia de git y registro de preguntas | Ver más abajo |
 
 ### Linux
 
@@ -87,14 +90,14 @@ Además, `setup` instala `bubblewrap` y `socat` con `apt-get` o `dnf`. En Ubuntu
 ### Desinstalar
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.2.0 setup --uninstall
+npx github:ramon-sg/claude-perimeter#v0.3.0 setup --uninstall
 ```
 
 ## `init`: el repo
 
 ```bash
 cd mi-repo
-npx github:ramon-sg/claude-perimeter#v0.2.0 init
+npx github:ramon-sg/claude-perimeter#v0.3.0 init
 ```
 
 Crea `.claude-perimeter.json` en la raíz del repo, si no existe, y corre el doctor del repo. Con una terminal te hace dos preguntas:
@@ -126,7 +129,7 @@ Sin terminal (en CI, o cuando lo corre el agente), no pregunta: usa `--merge-bas
 ## `doctor`: qué falta
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.2.0 doctor
+npx github:ramon-sg/claude-perimeter#v0.3.0 doctor
 ```
 
 ```
@@ -171,6 +174,7 @@ No cambia nada. Sale con código 1 si hay algún problema, así que sirve en CI 
 - Claude Code, `git` y `jq`.
 - Que los managed settings existan, sean JSON válido, sean de root y tengan cada pieza de la tabla de arriba.
 - Que los hooks estén instalados, sean de root y coincidan con esta versión.
+- Que Safety Net esté instalado, sea de root y sea la versión de este paquete. Además lo prueba: le pasa un `git reset --hard` y confirma que lo rechaza. Si el hook no arrancara (por ejemplo, porque ya no existe el `node` con que corriste `setup`), Claude Code lo tomaría como un error que no bloquea y dejaría pasar todo.
 - Que `sudo` pida contraseña.
 - **macOS:** que el Docker activo sea Docker Desktop y que sus carpetas compartidas no incluyan tu home.
 - **Linux:** `bubblewrap`, `socat`, el perfil de AppArmor si hace falta, y si Docker corre sin root.
@@ -205,9 +209,20 @@ El sandbox impide que el agente lea `~/.kube`, pero Docker corre fuera del sandb
 - **macOS con OrbStack o Colima:** no tienen esa opción, así que cualquier contenedor puede montar cualquier carpeta tuya. Por eso el doctor pide Docker Desktop.
 - **Linux:** Docker con root puede montar cualquier carpeta de la máquina, y un Docker *rootless* de tu mismo usuario puede montar tu `~/.kube`. Por eso, en Linux, `setup` no deja usar Docker dentro del sandbox: los comandos de Docker del agente van a fallar ahí. Si necesitas que el agente use Docker en Linux, lo seguro es un usuario de Linux propio para el agente, con Docker rootless. Así ese Docker solo ve los archivos de ese usuario, y puedes agregar su socket a `sandbox.network.allowUnixSockets`. Si el agente corre desatendido en un servidor, lo más simple es que esa máquina no tenga el kubeconfig de producción.
 
+## Safety Net
+
+[CC Safety Net](https://github.com/kenryu42/cc-safety-net) (MIT) revisa cada herramienta antes de que corra: comandos de Bash, y también Read, Edit y Write sobre llaves SSH, `.env` o credenciales. Analiza lo que hace el comando: lo encuentra dentro de `bash -c`, `python3 -c`, un `xargs` o un heredoc que se ejecuta, y deja pasar un heredoc que solo es texto, como el mensaje de un commit. Rechaza, no pregunta. Si necesitas uno de esos comandos, córrelo tú desde tu terminal.
+
+claude-perimeter no lo instala como plugin en tu configuración de usuario, que el agente puede editar. `setup` copia la versión fija a una carpeta de root y lo registra en los managed settings con:
+
+- `CC_SAFETY_NET_HOME` en una carpeta de root, así que el agente no puede aflojar sus reglas de usuario.
+- `CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY=1`: un `.cc-safety-net/` dentro del repo solo puede sumar reglas, no quitarlas.
+
+Para ver por qué rechazó algo: `npx -y cc-safety-net@2.6.18 explain '<comando>'`.
+
 ## El guardia de git
 
-Corre antes de cada comando de Bash, también en modo `--dangerously-skip-permissions`.
+Corre antes de cada comando de Bash, también en modo `--dangerously-skip-permissions`. Cubre lo que Safety Net no trae: las ramas protegidas, el método de merge y los comandos que corren fuera del sandbox.
 
 - **Rechaza:**
   - en `git push`, `fetch` y `pull`, que corren fuera del sandbox: `--receive-pack`, `--upload-pack`, `--exec`, `-c` y variables de entorno delante, porque harían correr un programa con tu acceso completo; un destino que no es una URL de red (un repo local corre sus propios hooks); y `--git-dir`, `--work-tree`, `--namespace` o un `-C` hacia otro repo, que cargaría los hooks y la configuración de ese repo
@@ -220,8 +235,6 @@ Corre antes de cada comando de Bash, también en modo `--dangerously-skip-permis
 - **Pregunta:**
   - un merge cuya base no está en `mergeBases`
   - `gh api …/merge`
-  - `rm -r`/`-f` o `git clean -f` fuera del proyecto y de los temporales, sobre `.git`, sobre otro worktree o con rutas que no puede resolver. Con el sandbox activo, igual nada se puede borrar fuera del proyecto y de los temporales
-  - `git clean -x`
 - **Con `CLAUDE_NIGHT_SHIFT=1`,** para sesiones sin nadie al lado, toda pregunta se vuelve rechazo.
 
 Es un filtro de texto: atrapa equivocaciones, no a alguien que lo quiere esquivar. Contra eso están el sandbox y la protección de ramas en GitHub.
@@ -243,6 +256,7 @@ Lo que más se repite es lo que conviene aprobar en tus reglas, o en `/auto-mode
 ## Límites conocidos
 
 - **Los comandos excluidos corren con tu acceso completo.** El guardia cierra las formas de hacerles ejecutar o leer algo propio (ver [El guardia de git](#el-guardia-de-git)), pero `git push`, `git fetch` y `git pull` igual ejecutan los hooks de git del repo. Si esos hooks viven dentro del repo (por ejemplo `.husky/pre-push`), el agente podría editarlos y ese código correría fuera del sandbox. El doctor avisa cuando un repo tiene sus hooks adentro. Trabajar con el agente en worktrees lo reduce, porque la carpeta `.git` común queda fuera de lo que el sandbox deja escribir.
+- **El `node` que usa Safety Net es tuyo.** El hook lo llama por la ruta con que corriste `setup` (por ejemplo dentro de `~/.asdf` o de Homebrew), y esa carpeta no es de root. El sandbox no deja escribir ahí, pero si cambias o borras esa versión de node, el hook deja de funcionar: el doctor lo detecta, y se arregla corriendo `setup` de nuevo.
 - **`sudo` sin contraseña desarma todo.** Quien tiene `sudo` puede editar los managed settings. Por eso `setup` corre `sudo -k` y el doctor avisa si `sudo` no pide contraseña.
 - **El modo `auto` sigue preguntando por comandos complejos.** El sandbox no cambia lo que revisa el clasificador del modo `auto`. Las preguntas por comandos largos se ajustan con `/auto-mode-setup`.
 - **Un `gh` con `$(…)` corre dentro del sandbox.** Claude Code deja dentro todo comando con una sustitución, y en macOS `gh` no funciona ahí. Para el cuerpo de un PR o un comentario, escríbelo a un archivo del proyecto y pásalo con `--body-file`. El guardia rechaza `--body-file` fuera del proyecto, los enlaces y las redirecciones de entrada (`< archivo`).
@@ -253,10 +267,10 @@ Lo que más se repite es lo que conviene aprobar en tus reglas, o en `/auto-mode
 
 ```bash
 npm test                                   # tests de Node y de los hooks
-GUARD_BASH=/bin/bash bash hooks/guard-git-fs.test.sh   # el guardia en el bash 3.2 de macOS
+GUARD_BASH=/bin/bash bash hooks/guard-git.test.sh   # el guardia en el bash 3.2 de macOS
 ```
 
-Sin dependencias: Node estándar y bash. El código y los nombres están en inglés; los mensajes, los comentarios y la documentación, en español.
+Una sola dependencia, `cc-safety-net`, con versión fija. El resto es Node estándar y bash. El código y los nombres están en inglés; los mensajes, los comentarios y la documentación, en español.
 
 ## Licencia
 

@@ -6,7 +6,8 @@ import { HOOK_FILES } from '../checks/machine.mjs';
 import { dockerProvider } from '../checks/docker.mjs';
 import { commandExists, run, runInteractive } from '../exec.mjs';
 import { buildManagedSettings } from '../managed-settings.mjs';
-import { PACKAGE_ROOT, installPaths, platformName, userHome } from '../platform.mjs';
+import { PACKAGE_ROOT, bundledSafetyNetDirectory, installPaths, platformName, userHome } from '../platform.mjs';
+import { safetyNetVersion } from '../checks/safety-net.mjs';
 import { doctor } from './doctor.mjs';
 
 /** Perfil de AppArmor que deja a bubblewrap crear su aislamiento (Ubuntu 24.04+). */
@@ -142,10 +143,30 @@ export const setup = async (options) => {
     return 0;
   }
 
-  const settings = buildManagedSettings({ platform, home: userHome(), hooksDirectory: paths.hooksDirectory });
+  const settings = buildManagedSettings({
+    platform,
+    home: userHome(),
+    hooksDirectory: paths.hooksDirectory,
+    // El node con que corres setup: el hook de Safety Net lo usa por su ruta
+    // absoluta, porque Claude Code no siempre tiene tu PATH.
+    nodePath: process.execPath,
+    safetyNetDirectory: paths.safetyNetDirectory,
+    safetyNetHome: paths.safetyNetHome,
+  });
   const settingsJson = `${JSON.stringify(settings, null, 2)}\n`;
   const group = rootGroup(platform);
+  const safetyNetSource = bundledSafetyNetDirectory();
   const steps = [
+    {
+      description: `Copiar Safety Net ${safetyNetVersion(safetyNetSource)} a ${paths.safetyNetDirectory} (de root)`,
+      run: () => {
+        sudo(['rm', '-rf', paths.safetyNetDirectory]);
+        sudo(['mkdir', '-p', path.dirname(paths.safetyNetDirectory), paths.safetyNetHome]);
+        sudo(['cp', '-R', safetyNetSource, paths.safetyNetDirectory]);
+        sudo(['chown', '-R', `root:${group}`, paths.safetyNetDirectory, paths.safetyNetHome]);
+        sudo(['chmod', '-R', 'go-w', paths.safetyNetDirectory, paths.safetyNetHome]);
+      },
+    },
     {
       description: `Copiar los hooks a ${paths.hooksDirectory} (de root)`,
       run: () => {

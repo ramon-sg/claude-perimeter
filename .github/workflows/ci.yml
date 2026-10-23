@@ -15,9 +15,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: npm ci
       - run: npm test
       - name: Guardia con /bin/bash (3.2 en macOS)
         if: runner.os == 'macOS'
-        run: GUARD_BASH=/bin/bash bash hooks/guard-git-fs.test.sh
+        run: GUARD_BASH=/bin/bash bash hooks/guard-git.test.sh
       - run: node bin/claude-perimeter.mjs setup --dry-run
       - run: node bin/claude-perimeter.mjs doctor --offline --json > /dev/null || true

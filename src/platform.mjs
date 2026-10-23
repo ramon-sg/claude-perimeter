@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,8 +35,21 @@ export const installPaths = (platform) => {
     dropInDirectory: path.join(base, 'managed-settings.d'),
     dropInFile: path.join(base, 'managed-settings.d', DROP_IN_FILE_NAME),
     hooksDirectory: path.join(base, 'claude-perimeter', 'hooks'),
+    // Copia de Safety Net y su carpeta de configuración, las dos de root: el
+    // agente no puede cambiar la versión ni aflojar sus reglas de usuario.
+    safetyNetDirectory: path.join(base, 'claude-perimeter', 'cc-safety-net'),
+    safetyNetHome: path.join(base, 'claude-perimeter', 'cc-safety-net-home'),
   };
 };
+
+/**
+ * Carpeta de Safety Net que trae este paquete como dependencia (en
+ * `node_modules`, junto al paquete o dentro de él).
+ *
+ * @returns {string}
+ */
+export const bundledSafetyNetDirectory = () =>
+  path.dirname(createRequire(import.meta.url).resolve('cc-safety-net/package.json'));
 
 /** @returns {string} el directorio home de la persona (no el de root). */
 export const userHome = () => os.homedir();
