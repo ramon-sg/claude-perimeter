@@ -3,12 +3,12 @@
 Barandas para [Claude Code](https://code.claude.com): que el agente pueda trabajar solo, commitear, pushear a su rama, correr tests y abrir PRs, sin poder romper lo que no tiene vuelta atrás, como un push a `main`, un borrado fuera del proyecto o un cambio en tu cluster de producción.
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.3.0 setup    # configura la máquina (pide sudo)
-npx github:ramon-sg/claude-perimeter#v0.3.0 init     # configura el repo donde estás
-npx github:ramon-sg/claude-perimeter#v0.3.0 doctor   # muestra qué falta
+npx github:ramon-sg/claude-perimeter#v0.3.1 setup    # configura la máquina (pide sudo)
+npx github:ramon-sg/claude-perimeter#v0.3.1 init     # configura el repo donde estás
+npx github:ramon-sg/claude-perimeter#v0.3.1 doctor   # muestra qué falta
 ```
 
-No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.3.0` fija la versión, para que lo que se instala no cambie solo.
+No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHub. El `#v0.3.1` fija la versión, para que lo que se instala no cambie solo.
 
 ---
 
@@ -50,8 +50,8 @@ No hace falta instalarlo ni publicarlo en npm: `npx` lo baja directo desde GitHu
 ## `setup`: la máquina
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.3.0 setup --dry-run   # muestra qué haría, sin tocar nada
-npx github:ramon-sg/claude-perimeter#v0.3.0 setup             # lo hace (pide tu contraseña de sudo)
+npx github:ramon-sg/claude-perimeter#v0.3.1 setup --dry-run   # muestra qué haría, sin tocar nada
+npx github:ramon-sg/claude-perimeter#v0.3.1 setup             # lo hace (pide tu contraseña de sudo)
 ```
 
 Instala tres cosas en la carpeta de sistema de Claude Code (`/Library/Application Support/ClaudeCode/` en macOS, `/etc/claude-code/` en Linux):
@@ -62,7 +62,7 @@ Instala tres cosas en la carpeta de sistema de Claude Code (`/Library/Applicatio
 
 Al terminar corre `sudo -k`, para que la contraseña de sudo no quede recordada y un comando del agente no pueda usarla.
 
-Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.3.0`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-perimeter.mjs setup`.
+Corre `setup` tú, desde tu terminal, nunca pidiéndoselo al agente, y siempre con una versión fija (`#v0.3.1`). Es el único paso que usa sudo. Si quieres revisar exactamente qué corre, clona el repo, revisa el tag y córrelo desde ahí: `node bin/claude-perimeter.mjs setup`.
 
 ### Lo que configura, pieza por pieza
 
@@ -90,14 +90,14 @@ Además, `setup` instala `bubblewrap` y `socat` con `apt-get` o `dnf`. En Ubuntu
 ### Desinstalar
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.3.0 setup --uninstall
+npx github:ramon-sg/claude-perimeter#v0.3.1 setup --uninstall
 ```
 
 ## `init`: el repo
 
 ```bash
 cd mi-repo
-npx github:ramon-sg/claude-perimeter#v0.3.0 init
+npx github:ramon-sg/claude-perimeter#v0.3.1 init
 ```
 
 Crea `.claude-perimeter.json` en la raíz del repo, si no existe, y corre el doctor del repo. Con una terminal te hace dos preguntas:
@@ -129,7 +129,7 @@ Sin terminal (en CI, o cuando lo corre el agente), no pregunta: usa `--merge-bas
 ## `doctor`: qué falta
 
 ```bash
-npx github:ramon-sg/claude-perimeter#v0.3.0 doctor
+npx github:ramon-sg/claude-perimeter#v0.3.1 doctor
 ```
 
 ```
@@ -167,6 +167,7 @@ No cambia nada. Sale con código 1 si hay algún problema, así que sirve en CI 
 | `--explain` | Muestra el detalle de cada aviso |
 | `--offline` | Sin consultas a GitHub |
 | `--json` | Salida en JSON |
+| `--critical` | Sale con 1 solo si falta algo sin lo cual el agente queda sin barandas: el sandbox, Safety Net, el guardia de git o la regla de `kubectl`. Un aviso de Docker o del repo no cuenta. Sirve para que un script decida si arranca una sesión desatendida |
 
 ### Lo que revisa
 

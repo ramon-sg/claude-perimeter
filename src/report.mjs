@@ -42,3 +42,32 @@ export const renderReport = (groups, { color = false, explain = false } = {}) =>
 
 /** @param {Check[]} checks @returns {boolean} si hay algún problema. */
 export const hasFailures = (checks) => checks.some((check) => check.status === 'fail');
+
+/**
+ * Checks sin los cuales el agente queda sin barandas: el sandbox y lo que lo
+ * hace correr, la regla de kubectl, Safety Net y el guardia de git. Fuera
+ * quedan los que avisan de un riesgo sin desarmar nada (Docker, el registro de
+ * preguntas, el repo).
+ */
+export const CRITICAL_CHECK_IDS = new Set([
+  'platform',
+  'managed-settings',
+  'sandbox-enabled',
+  'sandbox-fail-if-unavailable',
+  'sandbox-no-escape',
+  'sandbox-deny-kube',
+  'read-tool-deny-kube',
+  'kubectl-ask',
+  'safety-net-hook',
+  'safety-net',
+  'safety-net-probe',
+  'git-guard-hook',
+  'hook-guard-git.sh',
+  'linux-bubblewrap',
+  'linux-socat',
+  'linux-apparmor',
+]);
+
+/** @param {Check[]} checks @returns {boolean} si falla algún check crítico. */
+export const hasCriticalFailures = (checks) =>
+  checks.some((check) => check.status === 'fail' && CRITICAL_CHECK_IDS.has(check.id));
