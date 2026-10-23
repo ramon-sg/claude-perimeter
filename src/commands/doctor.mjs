@@ -1,13 +1,15 @@
 import { machineChecks } from '../checks/machine.mjs';
 import { repoChecks } from '../checks/repo.mjs';
 import { platformName, userHome } from '../platform.mjs';
-import { hasFailures, renderReport } from '../report.mjs';
+import { hasCriticalFailures, hasFailures, renderReport } from '../report.mjs';
 
 /**
  * `claude-perimeter doctor`: revisa la máquina y el repo, y dice qué falta.
- * No cambia nada. Sale con código 1 si hay algún problema.
+ * No cambia nada. Sale con código 1 si hay algún problema; con `critical`,
+ * solo si falla algo que deja al agente sin barandas (para scripts que deciden
+ * si arrancar una sesión desatendida).
  *
- * @param {{ repoOnly?: boolean, machineOnly?: boolean, explain?: boolean, json?: boolean, offline?: boolean }} options
+ * @param {{ repoOnly?: boolean, machineOnly?: boolean, explain?: boolean, json?: boolean, offline?: boolean, critical?: boolean }} options
  */
 export const doctor = (options) => {
   const platform = process.platform;
@@ -25,5 +27,5 @@ export const doctor = (options) => {
     const color = process.stdout.isTTY && !process.env.NO_COLOR;
     process.stdout.write(`claude-perimeter doctor\n${renderReport(groups, { color, explain: options.explain })}\n`);
   }
-  return hasFailures(checks) ? 1 : 0;
+  return (options.critical ? hasCriticalFailures(checks) : hasFailures(checks)) ? 1 : 0;
 };

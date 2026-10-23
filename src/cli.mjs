@@ -28,6 +28,7 @@ Opciones de doctor:
   --explain      Muestra el detalle de cada aviso.
   --offline      Sin consultas a GitHub.
   --json         Salida en JSON.
+  --critical     Sale con 1 solo si falta algo sin lo cual el agente queda sin barandas.
 
 Más: https://github.com/ramon-sg/claude-perimeter
 `;
@@ -62,6 +63,7 @@ export const main = async (argv) => {
         explain: has('--explain'),
         offline: has('--offline'),
         json: has('--json'),
+        critical: has('--critical'),
       });
     case '--version':
     case '-v':
