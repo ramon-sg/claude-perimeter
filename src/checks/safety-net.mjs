@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { run } from '../exec.mjs';
-import { isSafetyNetCommand } from '../managed-settings.mjs';
+import { isSafetyNetCommand, shellQuote } from '../managed-settings.mjs';
 
 const SETUP_FIX = 'Corre: npx github:ramon-sg/claude-perimeter setup';
 
@@ -67,7 +67,7 @@ const probe = (command) => {
 /**
  * Checks de Safety Net: la copia de root, su versión y que el hook bloquee.
  *
- * @param {{ safetyNetDirectory: string }} paths
+ * @param {{ safetyNetDirectory: string, nodeFile: string }} paths
  * @param {any} settings los managed settings ya leídos (o `undefined`).
  * @param {string} bundledVersion la versión que trae este paquete.
  */
@@ -92,6 +92,17 @@ export const safetyNetChecks = (paths, settings, bundledVersion) => {
     });
   }
   const command = safetyNetCommand(settings);
+  if (command !== undefined && !command.includes(shellQuote(paths.nodeFile))) {
+    checks.push({
+      id: 'safety-net-node',
+      status: 'warn',
+      title: 'Safety Net corre con un node que no es de root',
+      detail:
+        'Tu node no arrancó copiado suelto (por ejemplo, el de Homebrew depende de sus librerías), así que el hook usa el ' +
+        'tuyo. El sandbox no deja al agente escribir ahí, pero cambiar esa versión de node apaga el hook.',
+      fix: 'Instala un node que funcione suelto (el oficial de nodejs.org, asdf o nvm) y corre setup con él.',
+    });
+  }
   if (command !== undefined) {
     const decision = probe(command);
     checks.push(

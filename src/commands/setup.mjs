@@ -35,6 +35,25 @@ const confirm = async (question, assumeYes) => {
   return /^(s|si|sí|y|yes)$/i.test(answer.trim());
 };
 
+/**
+ * ¿<nodePath> arranca copiado a otra carpeta? Lo prueba en un temporal.
+ *
+ * @param {string} nodePath
+ */
+const nodeRunsWhenCopied = (nodePath) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-perimeter-node-'));
+  try {
+    const copy = path.join(directory, 'node');
+    fs.copyFileSync(nodePath, copy);
+    fs.chmodSync(copy, 0o755);
+    return run(copy, ['-e', 'process.stdout.write(process.version)']).stdout === process.version;
+  } catch {
+    return false;
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+};
+
 /** Corre un paso con sudo y corta si falla. */
 const sudo = (args) => {
   const code = runInteractive('sudo', args);
@@ -143,13 +162,16 @@ export const setup = async (options) => {
     return 0;
   }
 
+  // El hook de Safety Net corre con una copia de root del node con que corres
+  // setup: si usara tu node (en ~/.asdf o Homebrew), cambiarlo desarmaría el
+  // hook. Un node que depende de librerías propias no arranca copiado suelto;
+  // ahí se usa el original y el doctor lo avisa.
+  const nodeCopyWorks = nodeRunsWhenCopied(process.execPath);
   const settings = buildManagedSettings({
     platform,
     home: userHome(),
     hooksDirectory: paths.hooksDirectory,
-    // El node con que corres setup: el hook de Safety Net lo usa por su ruta
-    // absoluta, porque Claude Code no siempre tiene tu PATH.
-    nodePath: process.execPath,
+    nodePath: nodeCopyWorks ? paths.nodeFile : process.execPath,
     safetyNetDirectory: paths.safetyNetDirectory,
     safetyNetHome: paths.safetyNetHome,
   });
@@ -157,6 +179,18 @@ export const setup = async (options) => {
   const group = rootGroup(platform);
   const safetyNetSource = bundledSafetyNetDirectory();
   const steps = [
+    nodeCopyWorks
+      ? {
+          description: `Copiar node (${process.version}) a ${paths.nodeFile} (de root, lo usa Safety Net)`,
+          run: () => {
+            sudo(['mkdir', '-p', path.dirname(paths.nodeFile)]);
+            sudo(['install', '-m', '0755', '-o', 'root', '-g', group, process.execPath, paths.nodeFile]);
+          },
+        }
+      : {
+          description: `Usar ${process.execPath} para Safety Net: copiado suelto no arranca, y no es de root (el doctor lo avisa)`,
+          run: () => {},
+        },
     {
       description: `Copiar Safety Net ${safetyNetVersion(safetyNetSource)} a ${paths.safetyNetDirectory} (de root)`,
       run: () => {

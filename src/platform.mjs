@@ -38,6 +38,7 @@ export const installPaths = (platform) => {
     // Copia de Safety Net y su carpeta de configuración, las dos de root: el
     // agente no puede cambiar la versión ni aflojar sus reglas de usuario.
     safetyNetDirectory: path.join(base, 'claude-perimeter', 'cc-safety-net'),
+    nodeFile: path.join(base, 'claude-perimeter', 'node'),
     safetyNetHome: path.join(base, 'claude-perimeter', 'cc-safety-net-home'),
   };
 };
