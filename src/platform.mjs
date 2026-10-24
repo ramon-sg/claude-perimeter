@@ -8,6 +8,27 @@ export const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.
 
 export const DROP_IN_FILE_NAME = '50-claude-perimeter.json';
 
+/** Perfil de AppArmor que deja a bubblewrap crear su aislamiento (Ubuntu 24.04+). */
+export const APPARMOR_BWRAP_FILE = '/etc/apparmor.d/bwrap';
+export const APPARMOR_BWRAP_PROFILE = `abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+`;
+
+/**
+ * Carpeta del registro de preguntas de permisos (la misma que usa
+ * `hooks/log-permission-request.sh`).
+ *
+ * @param {string} home
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export const stateDirectory = (home, env = process.env) =>
+  path.join(env.XDG_STATE_HOME || path.join(home, '.local/state'), 'claude-perimeter');
+
 /**
  * Carpeta de sistema donde Claude Code lee los managed settings.
  * https://code.claude.com/docs/en/managed-settings

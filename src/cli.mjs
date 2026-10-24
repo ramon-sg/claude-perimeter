@@ -15,7 +15,8 @@ Uso:
 Opciones de setup:
   --dry-run      Muestra qué haría, sin cambiar nada.
   --yes          No pregunta antes de cada paso.
-  --uninstall    Borra lo que instaló setup.
+  --uninstall    Borra lo que instaló setup. Pregunta por la caché, el registro y
+                 los programas que pudo instalar (con --yes, nunca borra un programa).
 
 Opciones de init (sin opciones y con una terminal, init pregunta):
   --merge-base <rama>       Rama a la que el agente puede mergear sin preguntar (repetible).
