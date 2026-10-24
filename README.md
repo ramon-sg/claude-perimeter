@@ -90,8 +90,23 @@ Además, `setup` instala `bubblewrap` y `socat` con `apt-get` o `dnf`. En Ubuntu
 ### Desinstalar
 
 ```bash
+npx github:ramon-sg/claude-perimeter#v0.3.1 setup --uninstall --dry-run   # muestra qué encontró, sin borrar nada
 npx github:ramon-sg/claude-perimeter#v0.3.1 setup --uninstall
 ```
+
+Solo ofrece lo que encuentra en la máquina. Pregunta una vez antes de empezar y después por cada cosa, con "no" por omisión:
+
+| Qué | Cómo |
+|---|---|
+| La configuración (`managed-settings.d/50-claude-perimeter.json`) y la carpeta de root `claude-perimeter/` (hooks, Safety Net, node) | Se borran al contestar que sí la primera vez. `managed-settings.d/` se borra solo si queda vacía |
+| La caché del agente (`~/.cache/claude-perimeter`) y el registro de preguntas (`~/.local/state/claude-perimeter`) | Una pregunta por cada una |
+| Linux: el perfil de AppArmor `/etc/apparmor.d/bwrap` | Pregunta, y solo si es exactamente el que escribió `setup` |
+| macOS: Docker Desktop, si Homebrew lo tiene instalado | Pregunta, avisando que `setup` no sabe si lo instaló él. Tus imágenes y contenedores no se borran |
+| Linux: `bubblewrap` y `socat` | Pregunta, avisando que otros programas pueden usarlos |
+
+Con `--yes` borra todo lo que es de claude-perimeter sin preguntar, pero nunca un programa (Docker Desktop, `bubblewrap`, `socat`): esos solo se quitan contestando que sí en la terminal.
+
+No revierte lo que hiciste a mano, como limitar las carpetas compartidas de Docker Desktop. Reinicia las sesiones de Claude Code abiertas al terminar.
 
 ## `init`: el repo
 

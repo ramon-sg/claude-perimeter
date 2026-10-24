@@ -1,39 +1,24 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import readline from 'node:readline/promises';
 import { HOOK_FILES } from '../checks/machine.mjs';
 import { dockerProvider } from '../checks/docker.mjs';
-import { commandExists, run, runInteractive } from '../exec.mjs';
+import { commandExists, confirm, run, runInteractive, sudo } from '../exec.mjs';
 import { buildManagedSettings } from '../managed-settings.mjs';
-import { PACKAGE_ROOT, bundledSafetyNetDirectory, installPaths, platformName, userHome } from '../platform.mjs';
+import {
+  APPARMOR_BWRAP_FILE,
+  APPARMOR_BWRAP_PROFILE,
+  PACKAGE_ROOT,
+  bundledSafetyNetDirectory,
+  installPaths,
+  platformName,
+  userHome,
+} from '../platform.mjs';
 import { safetyNetVersion } from '../checks/safety-net.mjs';
 import { doctor } from './doctor.mjs';
-
-/** Perfil de AppArmor que deja a bubblewrap crear su aislamiento (Ubuntu 24.04+). */
-const APPARMOR_BWRAP_PROFILE = `abi <abi/4.0>,
-include <tunables/global>
-
-profile bwrap /usr/bin/bwrap flags=(unconfined) {
-  userns,
-  include if exists <local/bwrap>
-}
-`;
+import { uninstall } from './uninstall.mjs';
 
 const rootGroup = (platform) => (platform === 'darwin' ? 'wheel' : 'root');
-
-/**
- * @param {string} question
- * @param {boolean} assumeYes
- */
-const confirm = async (question, assumeYes) => {
-  if (assumeYes) return true;
-  if (!process.stdin.isTTY) return false;
-  const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await prompt.question(`${question} [s/N] `);
-  prompt.close();
-  return /^(s|si|sí|y|yes)$/i.test(answer.trim());
-};
 
 /**
  * ¿<nodePath> arranca copiado a otra carpeta? Lo prueba en un temporal.
@@ -52,12 +37,6 @@ const nodeRunsWhenCopied = (nodePath) => {
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
-};
-
-/** Corre un paso con sudo y corta si falla. */
-const sudo = (args) => {
-  const code = runInteractive('sudo', args);
-  if (code !== 0) throw new Error(`falló: sudo ${args.join(' ')}`);
 };
 
 const writeTemporary = (name, content) => {
@@ -92,11 +71,11 @@ const linuxSteps = () => {
   } catch {
     // Sin la clave, AppArmor no restringe nada.
   }
-  if (restricted === '1' && !fs.existsSync('/etc/apparmor.d/bwrap')) {
+  if (restricted === '1' && !fs.existsSync(APPARMOR_BWRAP_FILE)) {
     steps.push({
       description: 'Agregar el perfil de AppArmor para bubblewrap (Ubuntu 24.04+)',
       run: () => {
-        sudo(['install', '-m', '0644', '-o', 'root', '-g', 'root', writeTemporary('bwrap', APPARMOR_BWRAP_PROFILE), '/etc/apparmor.d/bwrap']);
+        sudo(['install', '-m', '0644', '-o', 'root', '-g', 'root', writeTemporary('bwrap', APPARMOR_BWRAP_PROFILE), APPARMOR_BWRAP_FILE]);
         sudo(['systemctl', 'reload', 'apparmor']);
       },
     });
@@ -151,16 +130,7 @@ export const setup = async (options) => {
     return 1;
   }
 
-  if (options.uninstall) {
-    process.stdout.write(`Voy a borrar:\n  ${paths.dropInFile}\n  ${path.dirname(paths.hooksDirectory)}\n`);
-    if (options.dryRun) return 0;
-    if (!(await confirm('¿Sigo?', options.yes))) return 1;
-    sudo(['rm', '-f', paths.dropInFile]);
-    sudo(['rm', '-rf', path.dirname(paths.hooksDirectory)]);
-    runInteractive('sudo', ['-k']);
-    process.stdout.write('Listo: claude-perimeter quedó desinstalado de esta máquina.\n');
-    return 0;
-  }
+  if (options.uninstall) return uninstall({ platform, paths, dryRun: options.dryRun, yes: options.yes });
 
   // El hook de Safety Net corre con una copia de root del node con que corres
   // setup: si usara tu node (en ~/.asdf o Homebrew), cambiarlo desarmaría el

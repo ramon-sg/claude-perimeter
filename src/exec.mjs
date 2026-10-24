@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import readline from 'node:readline/promises';
 
 /**
  * Corre un comando sin shell y devuelve su salida. Nunca lanza: un comando que
@@ -38,3 +39,24 @@ export const runInteractive = (command, args) => spawnSync(command, args, { stdi
  * @returns {boolean} si el comando está en el PATH.
  */
 export const commandExists = (name) => run('sh', ['-c', `command -v ${name}`]).code === 0;
+
+/** Corre un paso con sudo y corta si falla. */
+export const sudo = (args) => {
+  const code = runInteractive('sudo', args);
+  if (code !== 0) throw new Error(`falló: sudo ${args.join(' ')}`);
+};
+
+/**
+ * Pregunta sí o no. Sin terminal responde que no.
+ *
+ * @param {string} question
+ * @param {boolean} [assumeYes]
+ */
+export const confirm = async (question, assumeYes = false) => {
+  if (assumeYes) return true;
+  if (!process.stdin.isTTY) return false;
+  const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await prompt.question(`${question} [s/N] `);
+  prompt.close();
+  return /^(s|si|sí|y|yes)$/i.test(answer.trim());
+};
